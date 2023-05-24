@@ -13,8 +13,6 @@ import {
 import { deployContract, executeContractFunction } from "./implementations";
 export { WasmDeployEnvironment } from "./types";
 
-const file = process.argv[2];
-
 async function scanProjectDir(projectDir: string): Promise<[string, DeployScript][]> {
   console.log("Scan project in folder", projectDir);
 
@@ -31,6 +29,7 @@ async function scanProjectDir(projectDir: string): Promise<[string, DeployScript
 }
 
 async function main() {
+  const file = process.argv[2];
   const projects = await scanProjectDir(join(__dirname, "..", file));
 
   const deploymentPromises: Record<string, Promise<Deployment>> = {};
