@@ -15,6 +15,6 @@ export async function deployContract(name: string, args: DeploymentArguments): P
   return { address: fakeAddress };
 }
 
-export async function executeContractFunction(name: string, tx: TxOptions, functionName: string, ...rest: any[]) {
+export async function executeContractFunction(name: Deployment, tx: TxOptions, functionName: string, ...rest: any[]) {
   // TODO
 }

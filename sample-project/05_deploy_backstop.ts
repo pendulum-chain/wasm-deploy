@@ -1,4 +1,4 @@
-import {WasmDeployEnvironment} from "../src/index"
+import { WasmDeployEnvironment } from "../src/index";
 
 async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
@@ -12,22 +12,16 @@ async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployE
   await deployments.deploy("backstop", {
     from: deployer,
     contract: "BackstopPool",
-    args: [
-        router.address,
-        mUSD.address,
-        curve.address,
-        "0xAmber Backstop LP",
-        "mUSD-BLP",
-    ],
+    args: [router.address, mUSD.address, curve.address, "0xAmber Backstop LP", "mUSD-BLP"],
     log: true,
   });
-};
+}
 
 DeployBackstopPool.tags = ["backstop"];
 
 DeployBackstopPool.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
   const alreadyDeployed = Boolean(await deployments.getOrNull("backstop"));
   return alreadyDeployed;
-}
+};
 
 export default DeployBackstopPool;

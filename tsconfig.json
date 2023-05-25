@@ -6,5 +6,5 @@
     "declaration": true
   },
 
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "sample-project/**/*"]
 }
