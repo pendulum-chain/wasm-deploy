@@ -69,28 +69,28 @@ async function processScripts(
   };
 
   const checkStuckState = () => {
-    const seemsToBeStuck = Array.from(scriptsRunning).every((scriptName) => {
-      return Array.from(scriptsWaiting[scriptName] ?? []).some((contractName) => {
-        return !deployments[contractName]?.completed;
+    const seemsToBeStuck =
+      scriptsRunning.size > 0 &&
+      Array.from(scriptsRunning).every((scriptName) => {
+        return Array.from(scriptsWaiting[scriptName] ?? []).some((contractName) => {
+          return !deployments[contractName]?.completed;
+        });
       });
-    });
 
     if (!seemsToBeStuck) {
       return;
     }
 
-    console.log("Looks like all scripts are stuck waiting. It could be that there are cyclic dependencies.");
+    console.log("\nIt seems like all scripts are stuck waiting and cannot complete. Are there cyclic dependencies?");
 
     Array.from(scriptsRunning).forEach((scriptName) => {
       console.log(`Script "${scriptName}" is waiting for the following contracts to be deployed:`);
       return Array.from(scriptsWaiting[scriptName] ?? []).forEach((contractName) => {
         if (!deployments[contractName]?.completed) {
-          console.log(`   "${contractName}"`);
+          console.log(`  - ${contractName}`);
         }
       });
     });
-
-    console.log("You might need to terminate this application.");
   };
 
   const getOrNull = async (scriptName: string, name: string): Promise<boolean> => {
@@ -160,6 +160,7 @@ async function processScripts(
       if (script.default.skip !== undefined && (await script.default.skip(environmentForScript))) {
         console.log(`Skip execution of script "${scriptName}"`);
         scriptsRunning.delete(scriptName);
+        checkStuckState();
         return;
       }
 
@@ -182,6 +183,8 @@ async function main() {
   const network = { name: "foucoco" };
 
   await processScripts(scripts, getNamedAccounts, network);
+
+  console.log("Deployment successful!");
 }
 
 main();
