@@ -4,11 +4,13 @@ import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
 import { ConfigFile, DeploymentArguments } from "../types";
+import { DeploymentStatus } from "..";
 
 export async function compileContract(
   args: DeploymentArguments,
   configFile: ConfigFile,
-  compiledContracts: Record<string, Promise<string>>
+  compiledContracts: Record<string, Promise<string>>,
+  updateContractStatus: (status: DeploymentStatus) => void
 ): Promise<string> {
   const { contract } = args;
   const uploadedCodePromise = (await compiledContracts[contract])?.trim();
@@ -16,7 +18,7 @@ export async function compileContract(
   if (uploadedCodePromise === undefined) {
     let resolve: (value: string) => void;
     compiledContracts[contract] = new Promise<string>((_resolve) => (resolve = _resolve));
-    const codeHash = await actuallyCompileContract(args, configFile);
+    const codeHash = await actuallyCompileContract(args, configFile, updateContractStatus);
     resolve!(codeHash);
 
     return codeHash;
@@ -25,7 +27,11 @@ export async function compileContract(
   return uploadedCodePromise;
 }
 
-async function actuallyCompileContract(args: DeploymentArguments, configFile: ConfigFile): Promise<string> {
+async function actuallyCompileContract(
+  args: DeploymentArguments,
+  configFile: ConfigFile,
+  updateContractStatus: (status: DeploymentStatus) => void
+): Promise<string> {
   const { contract } = args;
   const contractSourceName = configFile.contracts[contract];
   const builtFileName = join(configFile.buildFolder, basename(contractSourceName));
@@ -35,7 +41,7 @@ async function actuallyCompileContract(args: DeploymentArguments, configFile: Co
   const metadataFileName = builtFileName.replace(/.sol$/, ".contract");
 
   const { importpaths } = configFile;
-  console.log(`  Compile contract ${contract}`);
+  updateContractStatus("compiling");
   const solangResult = await runCommand([
     "solang",
     "compile",
@@ -49,13 +55,14 @@ async function actuallyCompileContract(args: DeploymentArguments, configFile: Co
     ...importpaths.map((path) => ["--importpath", path]).flat(),
     contractSourceName,
   ]);
+  updateContractStatus("compiled");
 
   if (solangResult.exitCode !== 0) {
     console.log(solangResult.stdout, solangResult.stderr);
     throw new Error("Solang error, abort");
   }
 
-  console.log(`  Optimize contract ${contract}`);
+  updateContractStatus("optimizing");
   const wasmOptResult = await runCommand([
     "wasm-opt",
     "-Oz",
@@ -70,6 +77,7 @@ async function actuallyCompileContract(args: DeploymentArguments, configFile: Co
     console.log(wasmOptResult.stdout, wasmOptResult.stderr);
     throw new Error("Wasm-opt error, abort");
   }
+  updateContractStatus("optimized");
 
   const optimizedContract = await readFile(optimizedWasmFileName);
 
