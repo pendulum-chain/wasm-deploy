@@ -1,23 +1,35 @@
-export interface NamedAccounts {
-  deployer: string;
+import { KeyringPair } from "@polkadot/keyring/types";
+
+import { PromiseMutex } from "./helpers/promiseMutex";
+
+export interface NamedAccount {
+  accountId: string;
+  suri: string;
+  keypair: KeyringPair;
+  mutex: PromiseMutex;
 }
+
+export type NamedAccounts = Record<string, NamedAccount>;
 
 export interface Deployment {
   address: string;
+  deployer: NamedAccount;
+  compiledContractFileName: string;
 }
 
 export interface TxOptions {
-  from?: string;
+  from?: NamedAccount;
   log?: boolean;
 }
 
 export type ArgumentType = string | number | bigint;
 
 export interface DeploymentArguments {
-  from: string;
+  from: NamedAccount;
   contract: string;
   args: ArgumentType[];
   log: boolean;
+  constructorName?: string;
 }
 
 export interface DeploymentsExtension {
@@ -45,4 +57,25 @@ export type DeployScriptFunction = {
 
 export interface DeployScript {
   default: DeployScriptFunction;
+}
+
+export interface Limits {
+  gas: {
+    refTime: number | string;
+    proofSize: number | string;
+  };
+  storageDeposit?: number | string | null;
+}
+
+export interface ConfigFile {
+  contracts: Record<string, string>;
+  importpaths: string[];
+  networks: Record<string, NetworkConfig>;
+  buildFolder: string;
+  limits: Limits;
+}
+
+export interface NetworkConfig {
+  namedAccounts: Record<string, string>;
+  rpcUrl: string;
 }

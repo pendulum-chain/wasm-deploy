@@ -2,10 +2,10 @@ import { join, basename } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import blake2b from "blake2b";
 
-import { runCommand } from "./helpers/childProcess";
-import { ConfigFile, Deployment, DeploymentArguments, Network, TxOptions } from "./types";
+import { runCommand } from "../helpers/childProcess";
+import { ConfigFile, DeploymentArguments } from "../types";
 
-export async function compileContrac(
+export async function compileContract(
   args: DeploymentArguments,
   configFile: ConfigFile,
   compiledContracts: Record<string, Promise<string>>
@@ -83,73 +83,5 @@ async function actuallyCompileContract(args: DeploymentArguments, configFile: Co
   metadata.source.wasm = hexContract;
   await writeFile(metadataFileName, JSON.stringify(metadata, null, 2));
 
-  return codeHexHash;
-}
-
-export async function deployContract(
-  name: string,
-  args: DeploymentArguments,
-  configFile: ConfigFile,
-  network: Network,
-  codeHash: string
-): Promise<Deployment> {
-  const { contract, from: deployer, args: constructorArguments } = args;
-  if (deployer === undefined) {
-    throw new Error(`Unknown deployer account`);
-  }
-
-  const contractFile = configFile.contracts[contract];
-  const metadataFileName = join(configFile.buildFolder, basename(contractFile).replace(".sol", ".contract"));
-
-  await deployer.mutex.exclusive(async () => {
-    console.log(`  Instantiate contract ${name} from ${contract}`);
-
-    const cargoContractResult = await runCommand([
-      "cargo",
-      "contract",
-      "instantiate",
-      "--constructor",
-      "new",
-      "--suri",
-      deployer.suri,
-      "--url",
-      configFile.networks[network.name].rpcUrl,
-      "--skip-confirm",
-      "-x",
-      "--manifest-path",
-      ".",
-      ...constructorArguments.map((arg) => ["--args", String(arg)]).flat(),
-      //"--code-hash",
-      //codeHash,
-      metadataFileName,
-    ]);
-
-    console.log("STDOUT");
-    console.log(cargoContractResult.stdout);
-    console.log("STDERR");
-    console.log(cargoContractResult.stderr);
-
-    if (
-      cargoContractResult.stderr &&
-      !cargoContractResult.stderr.startsWith("ERROR: This contract has already been uploaded with code hash")
-    ) {
-      console.log(cargoContractResult.stdout, cargoContractResult.stderr);
-      throw new Error("Cargo contract error, abort");
-    }
-  });
-
-  // replace the following lines
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  let fakeAddress = "0x";
-  for (let i = 0; i < 32; i++)
-    fakeAddress += Math.floor(Math.random() * 256)
-      .toString(16)
-      .padStart(2, "0");
-
-  return { address: fakeAddress } as any;
-}
-
-export async function executeContractFunction(name: Deployment, tx: TxOptions, functionName: string, ...rest: any[]) {
-  // TODO
+  return metadataFileName;
 }

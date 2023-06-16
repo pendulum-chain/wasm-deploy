@@ -17,21 +17,45 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
   const poolEUR = await deployments.deploy("swap-mEUR", {
     from: deployer,
     contract: "SwapPool",
-    args: [mEUR.address, curve.address, router.address, backstop.address, treasury, "0xAmber mEUR Swap LP", "mEUR-LP"],
+    args: [
+      mEUR.address,
+      curve.address,
+      router.address,
+      backstop.address,
+      treasury.accountId,
+      "0xAmber mEUR Swap LP",
+      "mEUR-LP",
+    ],
     log: true,
   });
 
   const poolETH = await deployments.deploy("swap-mETH", {
     from: deployer,
     contract: "SwapPool",
-    args: [mETH.address, curve.address, router.address, backstop.address, treasury, "0xAmber mETH Swap LP", "mETH-LP"],
+    args: [
+      mETH.address,
+      curve.address,
+      router.address,
+      backstop.address,
+      treasury.accountId,
+      "0xAmber mETH Swap LP",
+      "mETH-LP",
+    ],
     log: true,
   });
 
   const poolUSD = await deployments.deploy("swap-mUSD", {
     from: deployer,
     contract: "SwapPool",
-    args: [mUSD.address, curve.address, router.address, backstop.address, treasury, "0xAmber mUSD Swap LP", "mUSD-LP"],
+    args: [
+      mUSD.address,
+      curve.address,
+      router.address,
+      backstop.address,
+      treasury.accountId,
+      "0xAmber mUSD Swap LP",
+      "mUSD-LP",
+    ],
     log: true,
   });
 

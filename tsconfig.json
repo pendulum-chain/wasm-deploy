@@ -3,7 +3,9 @@
 
   "compilerOptions": {
     "outDir": "build",
-    "declaration": true
+    "declaration": true,
+    "typeRoots": ["./node_modules/@types"],
+    "types": ["node"]
   },
 
   "include": ["src/**/*", "sample-project/**/*"]

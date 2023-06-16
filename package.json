@@ -10,9 +10,19 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@tsconfig/node16": "^1.0.4"
+    "@tsconfig/node16": "^1.0.4",
+    "@types/blake2b": "^2.1.0",
+    "@types/node": "^20.3.1"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^4.9.1",
+    "@polkadot/api": "^10.9.1",
+    "@polkadot/api-contract": "^10.9.1",
+    "@polkadot/keyring": "^12.3.2",
+    "@polkadot/types": "^10.9.1",
+    "@polkadot/types-codec": "^10.9.1",
+    "@polkadot/util-crypto": "^12.3.2",
+    "blake2b": "^2.1.4",
     "ts-node": "^10.9.1"
   }
 }

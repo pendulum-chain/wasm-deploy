@@ -21,19 +21,19 @@ async function DeployMockOracles({ getNamedAccounts, deployments }: WasmDeployEn
     deployments,
     { from: deployer, log: true },
     mUSD.address,
-    "0x572dDec9087154dC5dfBB1546Bb62713147e0Ab0" // USDC price feed
+    "6jEej8RZyb6bbLabGUD8BDTdBHBQc12C5RojbBC2buMkDqex" //"0x572dDec9087154dC5dfBB1546Bb62713147e0Ab0" // USDC price feed
   );
   await registerPriceFeed(
     deployments,
     { from: deployer, log: true },
     mEUR.address,
-    "0x7d7356bF6Ee5CDeC22B216581E48eCC700D0497A" // EUR price feed
+    "6jEej8RZyb6bbLabGUD8BDTdBHBQc12C5RojbBC2buMkDqex" //"0x7d7356bF6Ee5CDeC22B216581E48eCC700D0497A" // EUR price feed
   );
   await registerPriceFeed(
     deployments,
     { from: deployer, log: true },
     mETH.address,
-    "0x0715A7794a1dc8e42615F059dD6e406A6594651A" // ETH price feed
+    "6jEej8RZyb6bbLabGUD8BDTdBHBQc12C5RojbBC2buMkDqex" //"0x0715A7794a1dc8e42615F059dD6e406A6594651A" // ETH price feed
   );
 
   await registerAsset(deployments, { from: deployer, log: true }, mUSD.address, compatOracle.address);
