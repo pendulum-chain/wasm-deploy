@@ -16,10 +16,11 @@ import {
   TxOptions,
   WasmDeployEnvironment,
 } from "./types";
-import { compileContrac, deployContract, executeContractFunction } from "./implementations";
 import { PromiseMutex } from "./helpers/promiseMutex";
 import { ChainApi, connectToChain } from "./api";
 import { compileContract } from "./actions/compileContract";
+import { createAnimatedTextContext, StyledText } from "./helpers/terminal";
+import { WeightV2 } from "@polkadot/types/interfaces";
 export { WasmDeployEnvironment } from "./types";
 
 async function scanProjectDir(
@@ -61,10 +62,36 @@ async function scanProjectDir(
   return { scripts, configFile };
 }
 
+export type DeploymentStatus =
+  | "pending"
+  | "compiling"
+  | "compiled"
+  | "optimizing"
+  | "optimized"
+  | "deploying"
+  | "deployed";
+
 interface DeploymentRecord {
   completed: boolean;
   promise: Promise<Deployment>;
   resolver(deployment: Deployment): void;
+}
+
+interface ContractStatus {
+  scriptName: string;
+  contractFileName: string;
+  status: DeploymentStatus;
+  address?: string;
+}
+
+export type ExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success";
+
+interface ExecutionStatus {
+  functionName: string;
+  scriptName: string;
+  state: ExecutionState;
+  gasRequired?: WeightV2;
+  transactionResult?: string;
 }
 
 async function processScripts(
@@ -72,9 +99,14 @@ async function processScripts(
   getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
   configFile: ConfigFile,
-  chainApi: ChainApi
+  chainApi: ChainApi,
+  updateText: (newLines: StyledText[]) => void
 ) {
   const deployments: Record<string, DeploymentRecord> = {};
+  const contractStatus: Record<string, ContractStatus> = {};
+  const contractOrder: string[] = [];
+  const executionStatus: Record<string, ExecutionStatus[]> = {};
+
   const compiledContracts: Record<string, Promise<string>> = {};
   const scriptsRunning: Set<string> = new Set();
   const scriptsWaiting: Record<string, Set<string>> = {};
@@ -100,6 +132,44 @@ async function processScripts(
       promise,
       resolver,
     };
+  };
+
+  const updateDisplayedStatus = () => {
+    const styledTexts: StyledText[] = [];
+    for (const contractName of contractOrder) {
+      const { scriptName, contractFileName, status, address } = contractStatus[contractName];
+      styledTexts.push([
+        { text: contractName, color: "blue" },
+        { text: ` (source: ${contractFileName}, script: ${scriptName})` },
+        {
+          text: ` ${status}`,
+          color: status === "deployed" ? "green" : "yellow",
+          spinning: status === "compiling" || status === "optimizing" || status === "deploying",
+        },
+        ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
+      ]);
+
+      const thisExecutionStatus = executionStatus[contractName];
+      if (thisExecutionStatus) {
+        for (const execution of thisExecutionStatus) {
+          const { functionName, scriptName, state, gasRequired, transactionResult } = execution;
+
+          styledTexts.push([
+            { text: "    – " },
+            { text: functionName, color: "blue" },
+            { text: ` (script: ${scriptName})` },
+            ...(gasRequired !== undefined ? [{ text: ` (gas required: ${gasRequired.refTime.toHuman()})` }] : []),
+            {
+              text: ` ${state}`,
+              color: state === "success" ? "green" : "yellow",
+              spinning: state === "dry running" || state === "submitting",
+            },
+            ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
+          ]);
+        }
+      }
+    }
+    updateText(styledTexts);
   };
 
   const checkStuckState = () => {
@@ -132,15 +202,28 @@ async function processScripts(
   };
 
   const deploy = async (scriptName: string, contractName: string, args: DeploymentArguments) => {
-    console.log(`${scriptName}: Deploy contract "${contractName}"`);
+    contractOrder.push(contractName);
+    contractStatus[contractName] = {
+      contractFileName: args.contract,
+      scriptName,
+      status: "pending",
+    };
+
+    updateDisplayedStatus();
+
+    const updateContractStatus = (status: DeploymentStatus) => {
+      contractStatus[contractName].status = status;
+      updateDisplayedStatus();
+    };
 
     try {
-      const compiledContractFileName = await compileContract(args, configFile, compiledContracts);
+      const compiledContractFileName = await compileContract(args, configFile, compiledContracts, updateContractStatus);
       const deployedContractAddress = await chainApi.instantiateWithCode(
         contractName,
         compiledContractFileName,
         args,
-        configFile
+        configFile,
+        updateContractStatus
       );
       const deployment: Deployment = {
         address: deployedContractAddress,
@@ -148,7 +231,8 @@ async function processScripts(
         compiledContractFileName,
       };
 
-      console.log(`${scriptName}: Contract "${contractName}" deployed to address ${deployedContractAddress}`);
+      contractStatus[contractName].address = deployedContractAddress;
+      updateContractStatus("deployed");
 
       addDeploymentRecord(contractName);
       deployments[contractName].resolver(deployment);
@@ -186,9 +270,33 @@ async function processScripts(
     ...rest: any[]
   ) => {
     const contract = await get(scriptName, contractName);
+    if (executionStatus[contractName] === undefined) {
+      executionStatus[contractName] = [];
+    }
 
-    console.log(`${scriptName}: Execute function "${functionName}" in contract "${contractName}"`);
-    await chainApi.executeContractFunction(contract, tx, functionName, configFile, ...rest);
+    executionStatus[contractName].push({
+      functionName,
+      scriptName,
+      state: "pending",
+    });
+
+    const thisExecutionStatus = executionStatus[contractName][executionStatus[contractName].length - 1];
+
+    const updateExecutionStatus = (state: ExecutionState, gasRequired?: WeightV2, transactionResult?: string) => {
+      thisExecutionStatus.state = state;
+
+      if (gasRequired !== undefined) {
+        thisExecutionStatus.gasRequired = gasRequired;
+      }
+
+      if (transactionResult !== undefined) {
+        thisExecutionStatus.transactionResult = transactionResult;
+      }
+
+      updateDisplayedStatus();
+    };
+
+    await chainApi.executeContractFunction(contract, tx, functionName, configFile, updateExecutionStatus, ...rest);
   };
 
   scripts.forEach(([scriptName, _]) => {
@@ -247,6 +355,7 @@ async function main() {
     const accountId = networkConfig.namedAccounts[key];
     const rl = readline.createInterface({ input, output });
     const suri = (await rl.question(`Enter the secret key URI for named account "${key}" (${accountId}): `)).trim();
+    rl.close();
 
     namedAccounts[key] = {
       accountId,
@@ -260,7 +369,9 @@ async function main() {
     return namedAccounts;
   };
 
-  await processScripts(scripts, getNamedAccounts, network, configFile, chainApi);
+  await createAnimatedTextContext(async (updateText) => {
+    await processScripts(scripts, getNamedAccounts, network, configFile, chainApi, updateText);
+  });
 
   console.log("Deployment successful!");
   process.exit();

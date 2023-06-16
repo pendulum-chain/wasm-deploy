@@ -6,6 +6,7 @@ import { ITuple } from "@polkadot/types-codec/types";
 
 import { readFile } from "node:fs/promises";
 import { ConfigFile, Deployment, DeploymentArguments, TxOptions } from "./types";
+import { DeploymentStatus, ExecutionState } from ".";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
@@ -49,7 +50,8 @@ export async function connectToChain(rpcUrl: string) {
       name: string,
       compiledContractFileName: string,
       deploymentArguments: DeploymentArguments,
-      configFile: ConfigFile
+      configFile: ConfigFile,
+      updateContractStatus: (status: DeploymentStatus) => void
     ) {
       const deployer = deploymentArguments.from;
       if (deployer === undefined) {
@@ -75,7 +77,7 @@ export async function connectToChain(rpcUrl: string) {
       const tx = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...deploymentArguments.args);
 
       return await deployer.mutex.exclusive<string>(async () => {
-        console.log(`  Instantiate contract ${name} from ${deploymentArguments.contract}`);
+        updateContractStatus("deploying");
 
         return await new Promise<string>(async (resolve, reject) => {
           const unsub = await tx.signAndSend(deployer.keypair, { nonce: -1 }, ({ status, events }) => {
@@ -130,6 +132,7 @@ export async function connectToChain(rpcUrl: string) {
       tx: TxOptions,
       functionName: string,
       configFile: ConfigFile,
+      updateExecutionStatus: (state: ExecutionState, gasRequired?: WeightV2, transactionResult?: string) => void,
       ...rest: any[]
     ) {
       const { compiledContractFileName, address } = name;
@@ -138,9 +141,7 @@ export async function connectToChain(rpcUrl: string) {
         throw new Error(`Unknown deployer account`);
       }
 
-      if (tx.log) {
-        console.log(`  Execute function ${functionName} with arguments ${rest}`);
-      }
+      updateExecutionStatus("dry running");
 
       const compiledContractFile = await readFile(compiledContractFileName);
       const metadata = JSON.parse(compiledContractFile.toString("utf8"));
@@ -157,11 +158,7 @@ export async function connectToChain(rpcUrl: string) {
         ...rest
       );
 
-      if (tx.log) {
-        console.log(
-          `  Gas required: ${queryResult.gasRequired["refTime"]} (proofSize: ${queryResult.gasRequired["proofSize"]})`
-        );
-      }
+      updateExecutionStatus("gas estimated", queryResult.gasRequired);
 
       const txResult = contract.tx[functionName](
         {
@@ -172,12 +169,12 @@ export async function connectToChain(rpcUrl: string) {
       );
 
       await deployer.mutex.exclusive<void>(async () => {
+        updateExecutionStatus("submitting");
         await new Promise<void>(async (resolve) => {
           const unsub = await txResult.signAndSend(deployer.keypair, async (result: any) => {
             if (result.status.isFinalized || result.status.isInBlock) {
               if (tx.log) {
-                console.log("  Tx result:");
-                console.log(`  ${JSON.stringify(result.toHuman())}`);
+                updateExecutionStatus("success", undefined, JSON.stringify(result.toHuman()));
               }
 
               resolve();
