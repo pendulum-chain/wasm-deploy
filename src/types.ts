@@ -13,12 +13,11 @@ export type NamedAccounts = Record<string, NamedAccount>;
 
 export interface Deployment {
   address: string;
-  deployer: NamedAccount;
   compiledContractFileName: string;
 }
 
 export interface TxOptions {
-  from?: NamedAccount;
+  from: NamedAccount;
   log?: boolean;
 }
 

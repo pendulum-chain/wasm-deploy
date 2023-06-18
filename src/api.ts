@@ -1,15 +1,93 @@
 import { WsProvider, ApiPromise, Keyring } from "@polkadot/api";
 import { CodePromise, ContractPromise } from "@polkadot/api-contract";
-import { WeightV2 } from "@polkadot/types/interfaces";
+import { AccountId, AccountId32, DispatchInfo, Event, Weight, WeightV2 } from "@polkadot/types/interfaces";
 import { DispatchError } from "@polkadot/types/interfaces";
-import { ITuple } from "@polkadot/types-codec/types";
+import { INumber, ITuple } from "@polkadot/types-codec/types";
 
 import { readFile } from "node:fs/promises";
-import { ConfigFile, Deployment, DeploymentArguments, TxOptions } from "./types";
-import { DeploymentStatus, ExecutionState } from ".";
+import { ConfigFile, Deployment, DeploymentArguments, NamedAccount, TxOptions } from "./types";
+import { DeploymentState, ExecutionState } from ".";
+import { SubmittableExtrinsic } from "@polkadot/api/types";
+import { ISubmittableResult } from "@polkadot/types/types";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
+
+export type SubmitTransactionResult<T> = {
+  transactionFee: bigint | undefined;
+  result: { type: "success"; value: T } | { type: "error"; error: string };
+};
+
+async function submitTransaction<T>(
+  submitter: NamedAccount,
+  extrinsic: SubmittableExtrinsic<"promise", ISubmittableResult>,
+  onReadyToSubmit: () => void,
+  onFinalized: (events: Event[]) => T
+): Promise<SubmitTransactionResult<T>> {
+  return submitter.mutex.exclusive<SubmitTransactionResult<T>>(async () => {
+    onReadyToSubmit();
+
+    return await new Promise<SubmitTransactionResult<T>>(async (resolve, reject) => {
+      try {
+        const unsub = await extrinsic.signAndSend(submitter.keypair, { nonce: -1 }, (update) => {
+          const { status, events } = update;
+
+          if (status.isInBlock || status.isFinalized) {
+            let transactionFee: bigint | undefined = undefined;
+            let successResult: T | undefined = undefined;
+            let failureResult: string | undefined = undefined;
+
+            for (const eventRecord of events) {
+              const {
+                event: { data, section, method },
+              } = eventRecord;
+
+              if (section === "transactionPayment" && method === "TransactionFeePaid") {
+                const [, actualFee] = data as unknown as ITuple<[AccountId32, INumber, INumber]>;
+                transactionFee = actualFee.toBigInt();
+              }
+
+              if (section === "system" && method === "ExtrinsicFailed") {
+                const [dispatchError] = data as unknown as ITuple<[DispatchError, DispatchInfo]>;
+                let message = dispatchError.type.toString();
+
+                if (dispatchError.isModule) {
+                  try {
+                    const module = dispatchError.asModule;
+                    const error = dispatchError.registry.findMetaError(module);
+
+                    message = error.docs[0] ?? `${error.section}.${error.name}`;
+                  } catch {}
+                }
+
+                failureResult = message;
+              }
+
+              if (section === "system" && method === "ExtrinsicSuccess") {
+                try {
+                  const finalResult = onFinalized(events.map(({ event }) => event));
+                  successResult = finalResult;
+                } catch (error) {
+                  failureResult = (error as Error).message;
+                }
+              }
+            }
+
+            if (failureResult !== undefined) {
+              resolve({ transactionFee, result: { type: "error", error: failureResult } });
+            } else {
+              resolve({ transactionFee, result: { type: "success", value: successResult! } });
+            }
+
+            unsub();
+          }
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
 
 export async function connectToChain(rpcUrl: string) {
   const provider = new WsProvider(rpcUrl);
@@ -36,9 +114,11 @@ export async function connectToChain(rpcUrl: string) {
     .unwrapOrDefault()
     .toArray()
     .map((i) => i.toString());
+  const mainTokenSymbol: string | undefined = tokenSymbols[0];
 
   const chainNameString = chainName.toString();
 
+  console.log(`Connected to chain "${chainNameString}", token symbol: ${mainTokenSymbol}`);
   const keyring = new Keyring({ type: "sr25519", ss58Format: parsedSs58Prefix });
 
   return {
@@ -47,11 +127,10 @@ export async function connectToChain(rpcUrl: string) {
     },
 
     async instantiateWithCode(
-      name: string,
       compiledContractFileName: string,
       deploymentArguments: DeploymentArguments,
       configFile: ConfigFile,
-      updateContractStatus: (status: DeploymentStatus) => void
+      updateContractStatus: (status: DeploymentState) => void
     ) {
       const deployer = deploymentArguments.from;
       if (deployer === undefined) {
@@ -71,60 +150,28 @@ export async function connectToChain(rpcUrl: string) {
       }
 
       const { gas, storageDeposit: storageDepositLimit } = configFile.limits;
-
       const gasLimit = api.createType("WeightV2", gas) as WeightV2;
 
-      const tx = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...deploymentArguments.args);
+      const extrinsic = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...deploymentArguments.args);
 
-      return await deployer.mutex.exclusive<string>(async () => {
-        updateContractStatus("deploying");
-
-        return await new Promise<string>(async (resolve, reject) => {
-          const unsub = await tx.signAndSend(deployer.keypair, { nonce: -1 }, ({ status, events }) => {
-            // handle transaction errors
-            events
-              .filter((record): boolean => Boolean(record.event) && record.event.section !== "democracy")
-              .forEach(({ event: { data, method, section } }) => {
-                if (section === "system" && method === "ExtrinsicFailed") {
-                  const [dispatchError] = data as unknown as ITuple<[DispatchError]>;
-                  let message = dispatchError.type.toString();
-
-                  if (dispatchError.isModule) {
-                    try {
-                      const mod = dispatchError.asModule;
-                      const error = dispatchError.registry.findMetaError(mod);
-
-                      message = `${error.section}.${error.name}`;
-                    } catch (error) {
-                      console.error(error);
-                    }
-                  } else if (dispatchError.isToken) {
-                    message = `${dispatchError.type}.${dispatchError.asToken.type}`;
-                  }
-
-                  const errorMessage = `${section}.${method} ${message}`;
-                  console.error(`error: ${errorMessage}`);
-                }
-              });
-
-            if (status.isInBlock || status.isFinalized) {
-              const instantiateEvent = events.find(({ event }: any) => event.method === "Instantiated");
-
-              const addresses = instantiateEvent?.event.data.toHuman() as {
-                contract: string;
-                deployer: string;
-              };
-
-              if (!addresses || !addresses.contract) {
-                reject(new Error("Unable to get the contract address"));
-              } else {
-                resolve(addresses.contract);
-              }
-              unsub();
+      return await submitTransaction<string>(
+        deployer,
+        extrinsic,
+        () => {
+          updateContractStatus("deploying");
+        },
+        (events: Event[]) => {
+          for (const event of events) {
+            const { data, section, method } = event;
+            if (section === "contracts" && method === "Instantiated") {
+              const [, contract] = data as unknown as ITuple<[AccountId, AccountId]>;
+              return contract.toString();
             }
-          });
-        });
-      });
+          }
+
+          throw new Error("Contract address not found");
+        }
+      );
     },
 
     async executeContractFunction(
@@ -136,7 +183,7 @@ export async function connectToChain(rpcUrl: string) {
       ...rest: any[]
     ) {
       const { compiledContractFileName, address } = name;
-      const deployer = tx.from ?? name.deployer;
+      const deployer = tx.from;
       if (deployer === undefined) {
         throw new Error(`Unknown deployer account`);
       }
@@ -160,7 +207,7 @@ export async function connectToChain(rpcUrl: string) {
 
       updateExecutionStatus("gas estimated", queryResult.gasRequired);
 
-      const txResult = contract.tx[functionName](
+      const extrinsic = contract.tx[functionName](
         {
           storageDepositLimit,
           gasLimit: queryResult.gasRequired,
@@ -168,21 +215,14 @@ export async function connectToChain(rpcUrl: string) {
         ...rest
       );
 
-      await deployer.mutex.exclusive<void>(async () => {
-        updateExecutionStatus("submitting");
-        await new Promise<void>(async (resolve) => {
-          const unsub = await txResult.signAndSend(deployer.keypair, async (result: any) => {
-            if (result.status.isFinalized || result.status.isInBlock) {
-              if (tx.log) {
-                updateExecutionStatus("success", undefined, JSON.stringify(result.toHuman()));
-              }
-
-              resolve();
-              unsub();
-            }
-          });
-        });
-      });
+      return await submitTransaction<void>(
+        deployer,
+        extrinsic,
+        () => {
+          updateExecutionStatus("submitting");
+        },
+        (_events: Event[]) => {}
+      );
     },
   };
 }

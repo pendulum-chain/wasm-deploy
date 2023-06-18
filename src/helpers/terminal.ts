@@ -128,9 +128,13 @@ export async function createAnimatedTextContext(
 
   try {
     await execute(updateText);
+  } catch (error) {
+    console.error("An error occurred");
+    console.error((error as Error).message);
   } finally {
     if (process.stdout.isTTY) {
       showCursor();
+      process.stdout.write("\n");
     }
     clearInterval(spinningInterval);
   }
