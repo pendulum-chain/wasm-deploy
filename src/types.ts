@@ -32,7 +32,7 @@ export interface DeploymentArguments {
 }
 
 export interface DeploymentsExtension {
-  getOrNull(name: string): Promise<boolean>;
+  getOrNull(name: string): Promise<Deployment | null>;
   deploy(name: string, args: DeploymentArguments): Promise<Deployment>;
   get(name: string): Promise<Deployment>;
   execute(name: string, tx: TxOptions, functionName: string, ...rest: ArgumentType[]): Promise<void>;

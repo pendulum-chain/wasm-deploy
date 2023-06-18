@@ -1,8 +1,4 @@
-import { join } from "node:path";
-import { readdir } from "node:fs/promises";
-import * as readline from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
-import { cryptoWaitReady } from "@polkadot/util-crypto";
+import { WeightV2 } from "@polkadot/types/interfaces";
 
 import {
   ConfigFile,
@@ -15,51 +11,11 @@ import {
   TxOptions,
   WasmDeployEnvironment,
 } from "./types";
-import { PromiseMutex } from "./helpers/promiseMutex";
-import { ChainApi, connectToChain } from "./api";
+
+import { ChainApi } from "./api";
+import { StyledText } from "./helpers/terminal";
+import { DependencySystem } from "./helpers/dependencySystem";
 import { compileContract } from "./actions/compileContract";
-import { createAnimatedTextContext, StyledText } from "./helpers/terminal";
-import { WeightV2 } from "@polkadot/types/interfaces";
-export { WasmDeployEnvironment } from "./types";
-
-async function scanProjectDir(
-  projectDir: string
-): Promise<{ scripts: [string, DeployScript][]; configFile: ConfigFile }> {
-  console.log(`Scan project in folder "${projectDir}"`);
-
-  const entries = await readdir(projectDir, { recursive: true, withFileTypes: true });
-  const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
-
-  const files: [string, any][] = await Promise.all(
-    fileNames.map(async (file) => {
-      const path = join(projectDir, file);
-      const imports = await import(path);
-      return [file, imports];
-    })
-  );
-
-  const scripts: [string, DeployScript][] = [];
-  let configFile: ConfigFile | undefined = undefined;
-
-  for (const pair of files) {
-    const [fileName, imports] = pair;
-    if (fileName === "config.json") {
-      configFile = imports as ConfigFile;
-    } else {
-      scripts.push([fileName, imports]);
-    }
-  }
-
-  if (configFile === undefined) {
-    throw new Error("No config.json file found in project directory");
-  }
-
-  for (const contractName of Object.keys(configFile.contracts)) {
-    configFile.contracts[contractName] = join(projectDir, configFile.contracts[contractName]);
-  }
-
-  return { scripts, configFile };
-}
 
 export type DeploymentState =
   | "pending"
@@ -70,12 +26,6 @@ export type DeploymentState =
   | "deploying"
   | "deployed"
   | "failure";
-
-interface DeploymentRecord {
-  completed: boolean;
-  promise: Promise<Deployment>;
-  resolver(deployment: Deployment): void;
-}
 
 interface DeploymentStatus {
   scriptName: string;
@@ -106,37 +56,30 @@ async function processScripts(
   chainApi: ChainApi,
   updateText: (newLines: StyledText[]) => void
 ) {
-  const deployments: Record<string, DeploymentRecord> = {};
   const deploymentStatus: Record<string, DeploymentStatus> = {};
   const contractOrder: string[] = [];
   const executionStatus: Record<string, ExecutionStatus[]> = {};
-
   const compiledContracts: Record<string, Promise<string>> = {};
-  const scriptsRunning: Set<string> = new Set();
-  const scriptsWaiting: Record<string, Set<string>> = {};
+  let stuckMessage: string | undefined = undefined;
 
-  const addDeploymentRecord = (contractName: string) => {
-    if (deployments[contractName] !== undefined) {
-      return;
+  const scriptDependencies = new DependencySystem<Deployment>((waitingTasks) => {
+    if (waitingTasks === undefined) {
+      stuckMessage = undefined;
+    } else {
+      let stuckMessage =
+        "It seems like all scripts are stuck waiting and cannot complete. Are there cyclic dependencies?";
+
+      stuckMessage += Object.entries(waitingTasks)
+        .map(
+          ([scriptName, contracts]) =>
+            `Script "${scriptName}" is waiting for the following contracts to be deployed:` +
+            contracts.map((contractName) => `  - ${contractName}`).join("\n")
+        )
+        .join("\n");
     }
 
-    let resolver: (deployment: Deployment) => void = () => {};
-
-    const promise = new Promise<Deployment>((resolve) => {
-      const innerResolver = (deployment: Deployment) => {
-        deployments[contractName].completed = true;
-        resolve(deployment);
-      };
-
-      resolver = innerResolver;
-    });
-
-    deployments[contractName] = {
-      completed: false,
-      promise,
-      resolver,
-    };
-  };
+    updateDisplayedStatus();
+  });
 
   const updateDisplayedStatus = () => {
     const styledTexts: StyledText[] = [];
@@ -174,36 +117,12 @@ async function processScripts(
         }
       }
     }
-    updateText(styledTexts);
-  };
 
-  const checkStuckState = () => {
-    const seemsToBeStuck =
-      scriptsRunning.size > 0 &&
-      Array.from(scriptsRunning).every((scriptName) => {
-        return Array.from(scriptsWaiting[scriptName] ?? []).some((contractName) => {
-          return !deployments[contractName]?.completed;
-        });
-      });
-
-    if (!seemsToBeStuck) {
-      return;
+    if (stuckMessage !== undefined) {
+      styledTexts.push([{ text: stuckMessage, color: "red" }]);
     }
 
-    console.log("\nIt seems like all scripts are stuck waiting and cannot complete. Are there cyclic dependencies?");
-
-    Array.from(scriptsRunning).forEach((scriptName) => {
-      console.log(`Script "${scriptName}" is waiting for the following contracts to be deployed:`);
-      return Array.from(scriptsWaiting[scriptName] ?? []).forEach((contractName) => {
-        if (!deployments[contractName]?.completed) {
-          console.log(`  - ${contractName}`);
-        }
-      });
-    });
-  };
-
-  const getOrNull = async (scriptName: string, name: string): Promise<boolean> => {
-    return deployments[name]?.completed ?? false;
+    updateText(styledTexts);
   };
 
   const deploy = async (scriptName: string, contractName: string, args: DeploymentArguments) => {
@@ -244,26 +163,7 @@ async function processScripts(
     deploymentStatus[contractName].address = result.value;
     updateContractStatus("deployed");
 
-    addDeploymentRecord(contractName);
-    deployments[contractName].resolver(deployment);
-    return deployment;
-  };
-
-  const get = async (scriptName: string, contractName: string) => {
-    addDeploymentRecord(contractName);
-
-    if (!deployments[contractName].completed) {
-      if (scriptsWaiting[scriptName] === undefined) {
-        scriptsWaiting[scriptName] = new Set();
-      }
-      scriptsWaiting[scriptName].add(contractName);
-    }
-
-    checkStuckState();
-    const deployment = await deployments[contractName].promise;
-    if (scriptsWaiting[scriptName] !== undefined) {
-      scriptsWaiting[scriptName].delete(contractName);
-    }
+    scriptDependencies.provide(contractName, deployment);
     return deployment;
   };
 
@@ -274,7 +174,7 @@ async function processScripts(
     functionName: string,
     ...rest: any[]
   ) => {
-    const contract = await get(scriptName, contractName);
+    const contract = await scriptDependencies.get(scriptName, contractName);
     if (executionStatus[contractName] === undefined) {
       executionStatus[contractName] = [];
     }
@@ -316,15 +216,15 @@ async function processScripts(
   };
 
   scripts.forEach(([scriptName, _]) => {
-    scriptsRunning.add(scriptName);
+    scriptDependencies.registerTask(scriptName);
   });
 
   await Promise.all(
     scripts.map(async ([scriptName, script]) => {
       const deploymentsForScript: DeploymentsExtension = {
-        getOrNull: getOrNull.bind(null, scriptName),
+        getOrNull: (contractName: string) => scriptDependencies.getOrNull(contractName),
+        get: (contractName: string) => scriptDependencies.get(scriptName, contractName),
         deploy: deploy.bind(null, scriptName),
-        get: get.bind(null, scriptName),
         execute: execute.bind(null, scriptName),
       };
 
@@ -335,62 +235,12 @@ async function processScripts(
       };
 
       if (script.default.skip !== undefined && (await script.default.skip(environmentForScript))) {
-        console.log(`Skip execution of script "${scriptName}"`);
-        scriptsRunning.delete(scriptName);
-        checkStuckState();
+        scriptDependencies.removeTask(scriptName);
         return;
       }
 
       await script.default(environmentForScript);
-      scriptsRunning.delete(scriptName);
-
-      checkStuckState();
+      scriptDependencies.removeTask(scriptName);
     })
   );
 }
-
-async function main() {
-  const file = process.argv[2];
-  const { scripts, configFile } = await scanProjectDir(join(__dirname, "..", file));
-
-  const networkName = process.argv[3];
-  const network = { name: networkName };
-
-  const { networks } = configFile;
-  if (networks[networkName] === undefined) {
-    throw new Error(`Unknown network name ${networkName}`);
-  }
-
-  const networkConfig = networks[networkName];
-
-  await cryptoWaitReady();
-  const chainApi = await connectToChain(networkConfig.rpcUrl);
-
-  const namedAccounts: NamedAccounts = {};
-  for (const key of Object.keys(networkConfig.namedAccounts)) {
-    const accountId = networkConfig.namedAccounts[key];
-    const rl = readline.createInterface({ input, output });
-    const suri = (await rl.question(`Enter the secret key URI for named account "${key}" (${accountId}): `)).trim();
-    rl.close();
-
-    namedAccounts[key] = {
-      accountId,
-      suri,
-      keypair: chainApi.getKeyring().addFromUri(suri),
-      mutex: new PromiseMutex(),
-    };
-  }
-
-  const getNamedAccounts = async function (): Promise<NamedAccounts> {
-    return namedAccounts;
-  };
-
-  await createAnimatedTextContext(async (updateText) => {
-    await processScripts(scripts, getNamedAccounts, network, configFile, chainApi, updateText);
-  });
-
-  console.log("Deployment successful!");
-  process.exit();
-}
-
-main();

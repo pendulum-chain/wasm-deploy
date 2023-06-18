@@ -58,8 +58,7 @@ async function actuallyCompileContract(
   updateContractStatus("compiled");
 
   if (solangResult.exitCode !== 0) {
-    console.log(solangResult.stdout, solangResult.stderr);
-    throw new Error("Solang error, abort");
+    throw new Error(`Solang error: ${solangResult.stdout}, ${solangResult.stderr}`);
   }
 
   updateContractStatus("optimizing");
@@ -74,8 +73,7 @@ async function actuallyCompileContract(
   ]);
 
   if (wasmOptResult.exitCode !== 0) {
-    console.log(wasmOptResult.stdout, wasmOptResult.stderr);
-    throw new Error("Wasm-opt error, abort");
+    throw new Error(`Wasm-opt error: ${wasmOptResult.stdout}, ${wasmOptResult.stderr}`);
   }
   updateContractStatus("optimized");
 
