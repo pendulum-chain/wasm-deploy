@@ -1,0 +1,27 @@
+{
+  "contracts": {
+    "Router": "../../clones/nabla-contracts/contracts/src/core/Router.sol",
+    "MockERC20": "../../clones/nabla-contracts/contracts/src/mock/MockERC20.sol",
+    "ChainlinkAdapter": "../../clones/nabla-contracts/contracts/src/compat/ChainlinkAdapter.sol",
+    "AmberCurve": "../../clones/nabla-curve/src/AmberCurve.sol",
+    "BackstopPool": "../../clones/nabla-contracts/contracts/src/core/BackstopPool.sol",
+    "SwapPool": "../../clones/nabla-contracts/contracts/src/core/SwapPool.sol"
+  },
+  "importpaths": ["../clones/nabla-contracts/contracts/@chain/pendulum", "node_modules/"],
+  "networks": {
+    "foucoco": {
+      "namedAccounts": {
+        "deployer": "6iFKMtX29zYoHRgDkPTXKuRsHRbJ3Gnaxyc4dRrZTANHvZi3"
+      },
+      "rpcUrl": "wss://rpc-foucoco.pendulumchain.tech:443"
+    }
+  },
+  "buildFolder": "./target",
+  "limits": {
+    "gas": {
+      "refTime": "100000000000",
+      "proofSize": "1000000"
+    },
+    "storageDeposit": "10000000000000"
+  }
+}
