@@ -4,7 +4,7 @@ import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
 import { ConfigFile, DeploymentArguments } from "../types";
-import { DeploymentState } from "..";
+import { DeploymentState } from "../processScripts";
 
 export async function compileContract(
   args: DeploymentArguments,

@@ -1,3 +1,4 @@
+// ensure that some resource can only be acquired by one execution context at any time
 export class PromiseMutex {
   private mutexPromise: Promise<void> | undefined = undefined;
 
@@ -8,10 +9,12 @@ export class PromiseMutex {
 
     let resolve: (value: void) => void;
     this.mutexPromise = new Promise<void>((_resolve) => (resolve = _resolve));
-    const result = await action();
-    this.mutexPromise = undefined;
-    resolve!();
-
-    return result;
+    try {
+      const result = await action();
+      return result;
+    } finally {
+      this.mutexPromise = undefined;
+      resolve!();
+    }
   }
 }

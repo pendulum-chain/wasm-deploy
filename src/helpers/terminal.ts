@@ -78,7 +78,7 @@ function hideCursor() {
 
 export async function createAnimatedTextContext(
   execute: (updateText: (newLines: StyledText[]) => void) => Promise<void>
-) {
+): Promise<boolean> {
   let lines: StyledText[] = [];
   let inputReader: readline.Interface | undefined;
   let spinningIndex: number = 0;
@@ -98,21 +98,25 @@ export async function createAnimatedTextContext(
     hideCursor();
   }
 
-  const updateText = (newLines: StyledText[]) => {
+  const updateText = (newLines: StyledText[], ignoreScreenMeasures = false) => {
     if (process.stdout.isTTY) {
       const [noOfTerminalColumns, noOfTerminalRows] = process.stdout.getWindowSize();
 
       process.stdout.cursorTo(0);
-      process.stdout.moveCursor(0, -Math.min(lines.length, noOfTerminalRows) + 1);
+      const rowsToMoveUp = ignoreScreenMeasures ? lines.length : Math.min(lines.length, noOfTerminalRows);
+      process.stdout.moveCursor(0, -rowsToMoveUp + 1);
 
-      const linesToPrint = newLines.slice(Math.max(0, lines.length - noOfTerminalRows));
+      const linesToSkip = ignoreScreenMeasures ? 0 : Math.max(0, lines.length - noOfTerminalRows);
+      const linesToPrint = newLines.slice(linesToSkip);
 
       let firstLine = true;
       for (const line of linesToPrint) {
         if (firstLine === false) {
           process.stdout.write("\n");
         }
-        process.stdout.write(stringifyStyledText(line, noOfTerminalColumns, spinningIndex));
+        process.stdout.write(
+          stringifyStyledText(line, ignoreScreenMeasures ? undefined : noOfTerminalColumns, spinningIndex)
+        );
         process.stdout.clearLine(1);
         firstLine = false;
       }
@@ -128,19 +132,23 @@ export async function createAnimatedTextContext(
 
   try {
     await execute(updateText);
+    return true;
   } catch (error) {
     console.error("An error occurred");
     console.error((error as Error).message);
+    return false;
   } finally {
+    updateText(lines, true);
+
     if (process.stdout.isTTY) {
       showCursor();
       process.stdout.write("\n");
     }
     clearInterval(spinningInterval);
-  }
 
-  if (process.stdout.isTTY) {
-    inputReader?.close();
-    inputReader = undefined;
+    if (process.stdout.isTTY) {
+      inputReader?.close();
+      inputReader = undefined;
+    }
   }
 }

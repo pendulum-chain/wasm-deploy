@@ -6,9 +6,10 @@ import { INumber, ITuple } from "@polkadot/types-codec/types";
 
 import { readFile } from "node:fs/promises";
 import { ConfigFile, Deployment, DeploymentArguments, NamedAccount, TxOptions } from "./types";
-import { DeploymentState, ExecutionState } from ".";
+import { DeploymentState, ExecutionState } from "./processScripts";
 import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
+import { computeQuotient } from "./helpers/rationals";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
@@ -110,6 +111,8 @@ export async function connectToChain(rpcUrl: string) {
     .toArray()
     .map((i) => i.toNumber());
 
+  const tokenDivider = 10n ** BigInt(tokenDecimals[0]);
+
   const tokenSymbols = chainProperties.tokenSymbol
     .unwrapOrDefault()
     .toArray()
@@ -118,12 +121,16 @@ export async function connectToChain(rpcUrl: string) {
 
   const chainNameString = chainName.toString();
 
-  console.log(`Connected to chain "${chainNameString}", token symbol: ${mainTokenSymbol}`);
+  console.log(`Connected to chain ${chainNameString}`);
   const keyring = new Keyring({ type: "sr25519", ss58Format: parsedSs58Prefix });
 
   return {
     getKeyring() {
       return keyring;
+    },
+
+    getAmountString(amount: bigint) {
+      return `${computeQuotient(amount, tokenDivider, 10000)} ${mainTokenSymbol}`;
     },
 
     async instantiateWithCode(

@@ -48,7 +48,7 @@ interface ExecutionStatus {
   failure?: string;
 }
 
-async function processScripts(
+export async function processScripts(
   scripts: [string, DeployScript][],
   getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
@@ -84,11 +84,12 @@ async function processScripts(
   const updateDisplayedStatus = () => {
     const styledTexts: StyledText[] = [];
     for (const contractName of contractOrder) {
-      const { scriptName, contractFileName, state, address, failure } = deploymentStatus[contractName];
+      const { scriptName, contractFileName, state, address, transactionFee, failure } = deploymentStatus[contractName];
       styledTexts.push([
         { text: "📝 " },
         { text: contractName, color: "blue" },
         { text: ` (source: ${contractFileName}, script: ${scriptName})` },
+        ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
         {
           text: ` ${failure ?? state}`,
           color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
@@ -100,13 +101,13 @@ async function processScripts(
       const thisExecutionStatus = executionStatus[contractName];
       if (thisExecutionStatus) {
         for (const execution of thisExecutionStatus) {
-          const { functionName, scriptName, state, gasRequired, transactionResult, failure } = execution;
+          const { functionName, scriptName, state, transactionResult, transactionFee, failure } = execution;
 
           styledTexts.push([
             { text: "    🛠️ " },
             { text: functionName, color: "blue" },
             { text: ` (script: ${scriptName})` },
-            ...(gasRequired !== undefined ? [{ text: ` (gas required: ${gasRequired.refTime.toHuman()})` }] : []),
+            ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
             {
               text: ` ${failure ?? state}`,
               color: state === "success" ? "green" : state === "failure" ? "red" : "yellow",
