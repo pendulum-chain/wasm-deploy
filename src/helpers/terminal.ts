@@ -77,7 +77,10 @@ function hideCursor() {
 }
 
 export async function createAnimatedTextContext(
-  execute: (updateText: (newLines: StyledText[]) => void) => Promise<void>
+  execute: (
+    updateDynamicText: (newLines: StyledText[]) => void,
+    addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
+  ) => Promise<void>
 ): Promise<boolean> {
   let lines: StyledText[] = [];
   let inputReader: readline.Interface | undefined;
@@ -98,13 +101,27 @@ export async function createAnimatedTextContext(
     hideCursor();
   }
 
-  const updateText = (newLines: StyledText[], ignoreScreenMeasures = false) => {
+  const updateDynamicText = (
+    newLines: StyledText[],
+    ignoreScreenMeasures = false,
+    newStaticText: StyledText[] = []
+  ) => {
     if (process.stdout.isTTY) {
       const [noOfTerminalColumns, noOfTerminalRows] = process.stdout.getWindowSize();
 
       process.stdout.cursorTo(0);
       const rowsToMoveUp = ignoreScreenMeasures ? lines.length : Math.min(lines.length, noOfTerminalRows);
-      process.stdout.moveCursor(0, -rowsToMoveUp + 1);
+      if (rowsToMoveUp > 0) {
+        process.stdout.moveCursor(0, -rowsToMoveUp + 1);
+      }
+
+      if (lines.length <= noOfTerminalRows) {
+        for (const line of newStaticText) {
+          process.stdout.write(stringifyStyledText(line, undefined, spinningIndex));
+          process.stdout.clearLine(1);
+          process.stdout.write("\n");
+        }
+      }
 
       const linesToSkip = ignoreScreenMeasures ? 0 : Math.max(0, lines.length - noOfTerminalRows);
       const linesToPrint = newLines.slice(linesToSkip);
@@ -125,20 +142,24 @@ export async function createAnimatedTextContext(
     }
   };
 
+  const addStaticText = (newStaticText: StyledText[], removeDynamicText: boolean) => {
+    updateDynamicText(removeDynamicText ? [] : lines, false, newStaticText);
+  };
+
   const spinningInterval = setInterval(() => {
     spinningIndex++;
-    updateText(lines);
+    updateDynamicText(lines);
   }, 500);
 
   try {
-    await execute(updateText);
+    await execute(updateDynamicText, addStaticText);
     return true;
   } catch (error) {
     console.error("An error occurred");
     console.error((error as Error).message);
     return false;
   } finally {
-    updateText(lines, true);
+    updateDynamicText(lines, true);
 
     if (process.stdout.isTTY) {
       showCursor();
