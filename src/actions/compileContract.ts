@@ -4,13 +4,13 @@ import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
 import { ConfigFile, DeploymentArguments } from "../types";
-import { DeploymentState } from "../processScripts";
+import { ContractDeploymentState } from "../processScripts";
 
 export async function compileContract(
   args: DeploymentArguments,
   configFile: ConfigFile,
   compiledContracts: Record<string, Promise<string>>,
-  updateContractStatus: (status: DeploymentState) => void
+  updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
   const { contract } = args;
   const uploadedCodePromise = (await compiledContracts[contract])?.trim();
@@ -30,7 +30,7 @@ export async function compileContract(
 async function actuallyCompileContract(
   args: DeploymentArguments,
   configFile: ConfigFile,
-  updateContractStatus: (status: DeploymentState) => void
+  updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
   const { contract } = args;
   const contractSourceName = configFile.contracts[contract];

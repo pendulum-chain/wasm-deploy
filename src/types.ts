@@ -2,17 +2,23 @@ import { KeyringPair } from "@polkadot/keyring/types";
 
 import { PromiseMutex } from "./helpers/promiseMutex";
 
+export type DeployedContractId = string;
+export type ContractSourcecodeId = string;
+export type NamedAccountId = string;
+export type ScriptName = string;
+export type Address = string;
+
 export interface NamedAccount {
-  accountId: string;
+  accountId: Address;
   suri: string;
   keypair: KeyringPair;
   mutex: PromiseMutex;
 }
 
-export type NamedAccounts = Record<string, NamedAccount>;
+export type NamedAccounts = Record<NamedAccountId, NamedAccount>;
 
 export interface Deployment {
-  address: string;
+  address: Address;
   compiledContractFileName: string;
 }
 
@@ -25,17 +31,17 @@ export type ArgumentType = string | number | bigint;
 
 export interface DeploymentArguments {
   from: NamedAccount;
-  contract: string;
+  contract: ContractSourcecodeId;
   args: ArgumentType[];
   log: boolean;
   constructorName?: string;
 }
 
 export interface DeploymentsExtension {
-  getOrNull(name: string): Promise<Deployment | null>;
-  deploy(name: string, args: DeploymentArguments): Promise<Deployment>;
-  get(name: string): Promise<Deployment>;
-  execute(name: string, tx: TxOptions, functionName: string, ...rest: ArgumentType[]): Promise<void>;
+  getOrNull(name: DeployedContractId): Promise<Deployment | null>;
+  deploy(name: DeployedContractId, args: DeploymentArguments): Promise<Deployment>;
+  get(name: DeployedContractId): Promise<Deployment>;
+  execute(name: DeployedContractId, tx: TxOptions, functionName: string, ...rest: ArgumentType[]): Promise<void>;
 }
 
 export interface WasmDeployEnvironment {
@@ -67,7 +73,7 @@ export interface Limits {
 }
 
 export interface ConfigFile {
-  contracts: Record<string, string>;
+  contracts: Record<ContractSourcecodeId, string>;
   importpaths: string[];
   networks: Record<string, NetworkConfig>;
   buildFolder: string;
@@ -75,6 +81,6 @@ export interface ConfigFile {
 }
 
 export interface NetworkConfig {
-  namedAccounts: Record<string, string>;
+  namedAccounts: Record<NamedAccountId, Address>;
   rpcUrl: string;
 }

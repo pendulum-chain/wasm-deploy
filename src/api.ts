@@ -5,8 +5,8 @@ import { DispatchError } from "@polkadot/types/interfaces";
 import { INumber, ITuple } from "@polkadot/types-codec/types";
 
 import { readFile } from "node:fs/promises";
-import { ConfigFile, Deployment, DeploymentArguments, NamedAccount, TxOptions } from "./types";
-import { DeploymentState, ExecutionState } from "./processScripts";
+import { Address, ConfigFile, Deployment, DeploymentArguments, NamedAccount, TxOptions } from "./types";
+import { ContractDeploymentState, MethodExecutionState } from "./processScripts";
 import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
 import { computeQuotient } from "./helpers/rationals";
@@ -137,7 +137,7 @@ export async function connectToChain(rpcUrl: string) {
       compiledContractFileName: string,
       deploymentArguments: DeploymentArguments,
       configFile: ConfigFile,
-      updateContractStatus: (status: DeploymentState) => void
+      updateContractStatus: (status: ContractDeploymentState) => void
     ) {
       const deployer = deploymentArguments.from;
       if (deployer === undefined) {
@@ -161,7 +161,7 @@ export async function connectToChain(rpcUrl: string) {
 
       const extrinsic = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...deploymentArguments.args);
 
-      return await submitTransaction<string>(
+      return await submitTransaction<Address>(
         deployer,
         extrinsic,
         () => {
@@ -172,7 +172,7 @@ export async function connectToChain(rpcUrl: string) {
             const { data, section, method } = event;
             if (section === "contracts" && method === "Instantiated") {
               const [, contract] = data as unknown as ITuple<[AccountId, AccountId]>;
-              return contract.toString();
+              return contract.toString() as Address;
             }
           }
 
@@ -186,7 +186,7 @@ export async function connectToChain(rpcUrl: string) {
       tx: TxOptions,
       functionName: string,
       configFile: ConfigFile,
-      updateExecutionStatus: (state: ExecutionState, gasRequired?: WeightV2, transactionResult?: string) => void,
+      updateExecutionStatus: (state: MethodExecutionState, gasRequired?: WeightV2, transactionResult?: string) => void,
       ...rest: any[]
     ) {
       const { compiledContractFileName, address } = name;

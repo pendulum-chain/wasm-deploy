@@ -1,23 +1,26 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
 
 import {
+  Address,
   ConfigFile,
+  ContractSourcecodeId,
   DeployScript,
+  DeployedContractId,
   Deployment,
   DeploymentArguments,
   DeploymentsExtension,
   NamedAccounts,
   Network,
+  ScriptName,
   TxOptions,
   WasmDeployEnvironment,
 } from "./types";
 
 import { ChainApi } from "./api";
 import { StyledText } from "./helpers/terminal";
-import { DependencySystem } from "./helpers/dependencySystem";
 import { compileContract } from "./actions/compileContract";
 
-export type DeploymentState =
+export type ContractDeploymentState =
   | "pending"
   | "compiling"
   | "compiled"
@@ -27,117 +30,119 @@ export type DeploymentState =
   | "deployed"
   | "failure";
 
-interface DeploymentStatus {
-  scriptName: string;
-  contractFileName: string;
-  state: DeploymentState;
-  address?: string;
+interface ContractDeploymentStatus {
+  contractFileId: ContractSourcecodeId;
+  deployedContractId: DeployedContractId;
+  state: ContractDeploymentState;
+  address?: Address;
   failure?: string;
   transactionFee?: bigint;
 }
 
-export type ExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
+export type MethodExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
 
-interface ExecutionStatus {
+interface MethodExecutionStatus {
+  deployedContractId: DeployedContractId;
   functionName: string;
-  scriptName: string;
-  state: ExecutionState;
+  state: MethodExecutionState;
   gasRequired?: WeightV2;
   transactionFee?: bigint;
   transactionResult?: string;
   failure?: string;
 }
 
+type ExecutionStatus =
+  | { type: "contractDeployment"; status: ContractDeploymentStatus }
+  | { type: "methodExecution"; status: MethodExecutionStatus };
+
+function renderContractDeploymentStatus(
+  contractDeploymentStatus: ContractDeploymentStatus,
+  chainApi: ChainApi
+): StyledText {
+  const { contractFileId, deployedContractId, state, address, transactionFee, failure } = contractDeploymentStatus;
+  return [
+    { text: "  📝 " },
+    { text: deployedContractId, color: "blue" },
+    { text: ` (source: ${contractFileId})` },
+    ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
+    {
+      text: ` ${failure ?? state}`,
+      color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
+      spinning: state === "compiling" || state === "optimizing" || state === "deploying",
+    },
+    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
+  ];
+}
+
+function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText {
+  const { deployedContractId, functionName, state, transactionResult, transactionFee, failure } = methodExecutionStatus;
+
+  return [
+    { text: "  🧰 " },
+    { text: deployedContractId, color: "blue" },
+    { text: "." },
+    { text: functionName, color: "green" },
+    ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
+    {
+      text: ` ${failure ?? state}`,
+      color: state === "success" ? "green" : state === "failure" ? "red" : "yellow",
+      spinning: state === "dry running" || state === "submitting",
+    },
+    ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
+  ];
+}
+
 export async function processScripts(
-  scripts: [string, DeployScript][],
+  scripts: [ScriptName, DeployScript][],
   getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
   configFile: ConfigFile,
   chainApi: ChainApi,
-  updateText: (newLines: StyledText[]) => void
+  updateDynamicText: (newLines: StyledText[]) => void,
+  addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ) {
-  const deploymentStatus: Record<string, DeploymentStatus> = {};
-  const contractOrder: string[] = [];
-  const executionStatus: Record<string, ExecutionStatus[]> = {};
-  const compiledContracts: Record<string, Promise<string>> = {};
-  let stuckMessage: string | undefined = undefined;
+  let executionStatuses: ExecutionStatus[] = [];
+  const compiledContracts: Record<DeployedContractId, Promise<string>> = {};
+  const deployedContracts: Record<DeployedContractId, Deployment> = {};
 
-  const scriptDependencies = new DependencySystem<Deployment>((waitingTasks) => {
-    if (waitingTasks === undefined) {
-      stuckMessage = undefined;
-    } else {
-      let stuckMessage =
-        "It seems like all scripts are stuck waiting and cannot complete. Are there cyclic dependencies?";
+  const updateDisplayedStatus = (asStaticText: boolean = false) => {
+    const styledTexts = executionStatuses.map((executionStatus) => {
+      switch (executionStatus.type) {
+        case "contractDeployment":
+          return renderContractDeploymentStatus(executionStatus.status, chainApi);
 
-      stuckMessage += Object.entries(waitingTasks)
-        .map(
-          ([scriptName, contracts]) =>
-            `Script "${scriptName}" is waiting for the following contracts to be deployed:` +
-            contracts.map((contractName) => `  - ${contractName}`).join("\n")
-        )
-        .join("\n");
-    }
-
-    updateDisplayedStatus();
-  });
-
-  const updateDisplayedStatus = () => {
-    const styledTexts: StyledText[] = [];
-    for (const contractName of contractOrder) {
-      const { scriptName, contractFileName, state, address, transactionFee, failure } = deploymentStatus[contractName];
-      styledTexts.push([
-        { text: "📝 " },
-        { text: contractName, color: "blue" },
-        { text: ` (source: ${contractFileName}, script: ${scriptName})` },
-        ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
-        {
-          text: ` ${failure ?? state}`,
-          color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
-          spinning: state === "compiling" || state === "optimizing" || state === "deploying",
-        },
-        ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
-      ]);
-
-      const thisExecutionStatus = executionStatus[contractName];
-      if (thisExecutionStatus) {
-        for (const execution of thisExecutionStatus) {
-          const { functionName, scriptName, state, transactionResult, transactionFee, failure } = execution;
-
-          styledTexts.push([
-            { text: "    🛠️ " },
-            { text: functionName, color: "blue" },
-            { text: ` (script: ${scriptName})` },
-            ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
-            {
-              text: ` ${failure ?? state}`,
-              color: state === "success" ? "green" : state === "failure" ? "red" : "yellow",
-              spinning: state === "dry running" || state === "submitting",
-            },
-            ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
-          ]);
-        }
+        case "methodExecution":
+          return renderMethodExecutionStatus(executionStatus.status, chainApi);
       }
-    }
+    });
 
-    if (stuckMessage !== undefined) {
-      styledTexts.push([{ text: stuckMessage, color: "red" }]);
+    if (asStaticText === true) {
+      addStaticText(styledTexts, true);
+    } else {
+      updateDynamicText(styledTexts);
     }
-
-    updateText(styledTexts);
   };
 
-  const deploy = async (scriptName: string, contractName: string, args: DeploymentArguments) => {
-    contractOrder.push(contractName);
-    deploymentStatus[contractName] = {
-      contractFileName: args.contract,
-      scriptName,
+  const getDeployment = async (scriptName: ScriptName, deployedContractId: DeployedContractId): Promise<Deployment> => {
+    const deployment = deployedContracts[deployedContractId];
+    if (deployment !== undefined) {
+      return deployment;
+    }
+    throw new Error(`Try to load unknown contract ${deployedContractId} in script ${scriptName}`);
+  };
+
+  const deploy = async (scriptName: ScriptName, deployedContractId: DeployedContractId, args: DeploymentArguments) => {
+    const contractDeploymentStatus: ContractDeploymentStatus = {
+      deployedContractId,
+      contractFileId: args.contract,
       state: "pending",
     };
+    executionStatuses.push({ type: "contractDeployment", status: contractDeploymentStatus });
 
     updateDisplayedStatus();
 
-    const updateContractStatus = (status: DeploymentState) => {
-      deploymentStatus[contractName].state = status;
+    const updateContractStatus = (status: ContractDeploymentState) => {
+      contractDeploymentStatus.state = status;
       updateDisplayedStatus();
     };
 
@@ -149,50 +154,45 @@ export async function processScripts(
       updateContractStatus
     );
 
-    deploymentStatus[contractName].transactionFee = transactionFee;
+    contractDeploymentStatus.transactionFee = transactionFee;
     if (result.type === "error") {
-      deploymentStatus[contractName].failure = result.error;
+      contractDeploymentStatus.failure = result.error;
       updateContractStatus("failure");
 
-      throw new Error(`An error occurred deploying contract ${contractName}`);
+      throw new Error(`An error occurred deploying contract ${deployedContractId}`);
     }
 
     const deployment: Deployment = {
       address: result.value,
       compiledContractFileName,
     };
-    deploymentStatus[contractName].address = result.value;
+    contractDeploymentStatus.address = result.value;
     updateContractStatus("deployed");
 
-    scriptDependencies.provide(contractName, deployment);
+    deployedContracts[deployedContractId] = deployment;
     return deployment;
   };
 
   const execute = async (
-    scriptName: string,
-    contractName: string,
+    scriptName: ScriptName,
+    deployedContractId: DeployedContractId,
     tx: TxOptions,
     functionName: string,
     ...rest: any[]
   ) => {
-    const contract = await scriptDependencies.get(scriptName, contractName);
-    if (executionStatus[contractName] === undefined) {
-      executionStatus[contractName] = [];
-    }
-
-    executionStatus[contractName].push({
+    const contract = await getDeployment(scriptName, deployedContractId);
+    const methodExecutionStatus: MethodExecutionStatus = {
+      deployedContractId,
       functionName,
-      scriptName,
       state: "pending",
-    });
+    };
+    executionStatuses.push({ type: "methodExecution", status: methodExecutionStatus });
 
-    const thisExecutionStatus = executionStatus[contractName][executionStatus[contractName].length - 1];
-
-    const updateExecutionStatus = (state: ExecutionState, gasRequired?: WeightV2) => {
-      thisExecutionStatus.state = state;
+    const updateExecutionStatus = (state: MethodExecutionState, gasRequired?: WeightV2) => {
+      methodExecutionStatus.state = state;
 
       if (gasRequired !== undefined) {
-        thisExecutionStatus.gasRequired = gasRequired;
+        methodExecutionStatus.gasRequired = gasRequired;
       }
 
       updateDisplayedStatus();
@@ -207,41 +207,39 @@ export async function processScripts(
       ...rest
     );
 
-    thisExecutionStatus.transactionFee = transactionFee;
+    methodExecutionStatus.transactionFee = transactionFee;
     if (result.type === "error") {
-      thisExecutionStatus.failure = result.error;
+      methodExecutionStatus.failure = result.error;
       updateExecutionStatus("failure", undefined);
     } else {
       updateExecutionStatus("success", undefined);
     }
   };
 
-  scripts.forEach(([scriptName, _]) => {
-    scriptDependencies.registerTask(scriptName);
-  });
+  for (const scriptPair of scripts) {
+    const [scriptName, script] = scriptPair;
 
-  await Promise.all(
-    scripts.map(async ([scriptName, script]) => {
-      const deploymentsForScript: DeploymentsExtension = {
-        getOrNull: (contractName: string) => scriptDependencies.getOrNull(contractName),
-        get: (contractName: string) => scriptDependencies.get(scriptName, contractName),
-        deploy: deploy.bind(null, scriptName),
-        execute: execute.bind(null, scriptName),
-      };
+    const deploymentsForScript: DeploymentsExtension = {
+      getOrNull: async (deployedContractId: DeployedContractId) => deployedContracts[deployedContractId] ?? null,
+      get: getDeployment.bind(null, scriptName),
+      deploy: deploy.bind(null, scriptName),
+      execute: execute.bind(null, scriptName),
+    };
 
-      const environmentForScript: WasmDeployEnvironment = {
-        getNamedAccounts,
-        deployments: deploymentsForScript,
-        network,
-      };
+    const environmentForScript: WasmDeployEnvironment = {
+      getNamedAccounts,
+      deployments: deploymentsForScript,
+      network,
+    };
 
-      if (script.default.skip !== undefined && (await script.default.skip(environmentForScript))) {
-        scriptDependencies.removeTask(scriptName);
-        return;
-      }
+    if (script.default.skip !== undefined && (await script.default.skip(environmentForScript))) {
+      addStaticText([[{ text: "Skip execution of script " }, { text: scriptName, color: "cyan" }]], false);
+      continue;
+    }
 
-      await script.default(environmentForScript);
-      scriptDependencies.removeTask(scriptName);
-    })
-  );
+    addStaticText([[{ text: "Process script " }, { text: scriptName, color: "cyan" }]], false);
+    await script.default(environmentForScript);
+    updateDisplayedStatus(true);
+    executionStatuses = [];
+  }
 }

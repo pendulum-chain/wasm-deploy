@@ -4,7 +4,7 @@ import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
 
-import { ConfigFile, DeployScript, NamedAccounts } from "./types";
+import { ConfigFile, ContractSourcecodeId, DeployScript, NamedAccountId, NamedAccounts, ScriptName } from "./types";
 import { PromiseMutex } from "./helpers/promiseMutex";
 import { connectToChain } from "./api";
 import { createAnimatedTextContext } from "./helpers/terminal";
@@ -13,13 +13,13 @@ export { WasmDeployEnvironment } from "./types";
 
 async function scanProjectDir(
   projectDir: string
-): Promise<{ scripts: [string, DeployScript][]; configFile: ConfigFile }> {
+): Promise<{ scripts: [ScriptName, DeployScript][]; configFile: ConfigFile }> {
   console.log(`Scan project in folder "${projectDir}"`);
 
   const entries = await readdir(projectDir, { recursive: true, withFileTypes: true });
-  const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+  const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name as ScriptName);
 
-  const files: [string, any][] = await Promise.all(
+  const files: [ScriptName, any][] = await Promise.all(
     fileNames.map(async (file) => {
       const path = join(projectDir, file);
       const imports = await import(path);
@@ -27,7 +27,7 @@ async function scanProjectDir(
     })
   );
 
-  const scripts: [string, DeployScript][] = [];
+  const scripts: [ScriptName, DeployScript][] = [];
   let configFile: ConfigFile | undefined = undefined;
 
   for (const pair of files) {
@@ -43,10 +43,11 @@ async function scanProjectDir(
     throw new Error("No config.json file found in project directory");
   }
 
-  for (const contractName of Object.keys(configFile.contracts)) {
+  for (const contractName of Object.keys(configFile.contracts) as ContractSourcecodeId[]) {
     configFile.contracts[contractName] = join(projectDir, configFile.contracts[contractName]);
   }
 
+  scripts.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
   return { scripts, configFile };
 }
 
@@ -68,7 +69,7 @@ async function main() {
   const chainApi = await connectToChain(networkConfig.rpcUrl);
 
   const namedAccounts: NamedAccounts = {};
-  for (const key of Object.keys(networkConfig.namedAccounts)) {
+  for (const key of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
     const accountId = networkConfig.namedAccounts[key];
     const rl = readline.createInterface({ input, output });
     const suri = (await rl.question(`Enter the secret key URI for named account "${key}" (${accountId}): `)).trim();
@@ -86,8 +87,8 @@ async function main() {
     return namedAccounts;
   };
 
-  const successful = await createAnimatedTextContext(async (updateText) => {
-    await processScripts(scripts, getNamedAccounts, network, configFile, chainApi, updateText);
+  const successful = await createAnimatedTextContext(async (updateDynamicText, addStaticText) => {
+    await processScripts(scripts, getNamedAccounts, network, configFile, chainApi, updateDynamicText, addStaticText);
   });
 
   if (successful) {
