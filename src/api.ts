@@ -1,15 +1,26 @@
 import { WsProvider, ApiPromise, Keyring } from "@polkadot/api";
+import { BN_ZERO } from "@polkadot/util";
 import { CodePromise, ContractPromise } from "@polkadot/api-contract";
-import { AccountId, AccountId32, DispatchInfo, Event, Weight, WeightV2 } from "@polkadot/types/interfaces";
+import { AccountId, AccountId32, DispatchInfo, Event, WeightV2 } from "@polkadot/types/interfaces";
 import { DispatchError } from "@polkadot/types/interfaces";
 import { INumber, ITuple } from "@polkadot/types-codec/types";
 
 import { readFile } from "node:fs/promises";
-import { Address, ConfigFile, Deployment, DeploymentArguments, NamedAccount, TxOptions } from "./types";
+import {
+  Address,
+  ConfigFile,
+  DeployedContractId,
+  Deployment,
+  DeploymentArguments,
+  ExecuctionEvent,
+  NamedAccount,
+  TxOptions,
+} from "./types";
 import { ContractDeploymentState, MethodExecutionState } from "./processScripts";
 import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
 import { computeQuotient } from "./helpers/rationals";
+import { DecodedEvent } from "@polkadot/api-contract/types";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
@@ -111,7 +122,7 @@ export async function connectToChain(rpcUrl: string) {
     .toArray()
     .map((i) => i.toNumber());
 
-  const tokenDivider = 10n ** BigInt(tokenDecimals[0]);
+  const tokenDivider = tokenDecimals[0] !== undefined ? 10n ** BigInt(tokenDecimals[0]) : 12n;
 
   const tokenSymbols = chainProperties.tokenSymbol
     .unwrapOrDefault()
@@ -125,12 +136,17 @@ export async function connectToChain(rpcUrl: string) {
   const keyring = new Keyring({ type: "sr25519", ss58Format: parsedSs58Prefix });
 
   return {
+    api() {
+      return api;
+    },
+
     getKeyring() {
       return keyring;
     },
 
     getAmountString(amount: bigint) {
-      return `${computeQuotient(amount, tokenDivider, 10000)} ${mainTokenSymbol}`;
+      const quotient = computeQuotient(amount, tokenDivider, 10000);
+      return mainTokenSymbol !== undefined ? `${quotient} ${mainTokenSymbol}` : quotient;
     },
 
     async instantiateWithCode(
@@ -182,23 +198,22 @@ export async function connectToChain(rpcUrl: string) {
     },
 
     async executeContractFunction(
-      name: Deployment,
+      deployment: Deployment,
       tx: TxOptions,
       functionName: string,
       configFile: ConfigFile,
+      resolveContractEvent: (contractAddress: string, data: Buffer) => [DeployedContractId, DecodedEvent] | undefined,
       updateExecutionStatus: (state: MethodExecutionState, gasRequired?: WeightV2, transactionResult?: string) => void,
+      addEvent: (event: ExecuctionEvent) => void,
       ...rest: any[]
     ) {
-      const { compiledContractFileName, address } = name;
+      const { compiledContractFileName, address, metadata } = deployment;
       const deployer = tx.from;
       if (deployer === undefined) {
         throw new Error(`Unknown deployer account`);
       }
 
       updateExecutionStatus("dry running");
-
-      const compiledContractFile = await readFile(compiledContractFileName);
-      const metadata = JSON.parse(compiledContractFile.toString("utf8"));
 
       const contract = new ContractPromise(api, metadata, address);
 
@@ -214,12 +229,21 @@ export async function connectToChain(rpcUrl: string) {
 
       updateExecutionStatus("gas estimated", queryResult.gasRequired);
 
-      const extrinsic = contract.tx[functionName](
+      /*const extrinsic = contract.tx[functionName](
         {
           storageDepositLimit,
           gasLimit: queryResult.gasRequired,
         },
         ...rest
+      );*/
+
+      const typesAddress = api.registry.createType("AccountId", address);
+      const extrinsic = api.tx.contracts.call(
+        typesAddress,
+        BN_ZERO,
+        queryResult.gasRequired,
+        storageDepositLimit,
+        contract.abi.findMessage(functionName).toU8a(rest)
       );
 
       return await submitTransaction<void>(
@@ -228,7 +252,26 @@ export async function connectToChain(rpcUrl: string) {
         () => {
           updateExecutionStatus("submitting");
         },
-        (_events: Event[]) => {}
+        (events: Event[]) => {
+          for (const event of events) {
+            const { data, section, method } = event;
+            if (section === "contracts" && method === "ContractEmitted") {
+              const dataJson = data.toHuman() as { contract: string; data: string };
+              const message = resolveContractEvent(dataJson.contract, Buffer.from(dataJson.data.slice(2), "hex"));
+              if (message !== undefined) {
+                const [deployedContractId, decodedEvent] = message;
+                addEvent({
+                  args: decodedEvent.event.args.map((arg, index) => ({
+                    name: arg.name,
+                    value: decodedEvent.args[index].toHuman(),
+                  })),
+                  deployedContractId,
+                  identifier: decodedEvent.event.identifier,
+                });
+              }
+            }
+          }
+        }
       );
     },
   };

@@ -1,4 +1,5 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
+import { readFile } from "node:fs/promises";
 
 import {
   Address,
@@ -9,6 +10,7 @@ import {
   Deployment,
   DeploymentArguments,
   DeploymentsExtension,
+  ExecuctionEvent,
   NamedAccounts,
   Network,
   ScriptName,
@@ -19,6 +21,9 @@ import {
 import { ChainApi } from "./api";
 import { StyledText } from "./helpers/terminal";
 import { compileContract } from "./actions/compileContract";
+import { addressesAreEqual } from "./helpers/addresses";
+import { Abi } from "@polkadot/api-contract";
+import { DecodedEvent } from "@polkadot/api-contract/types";
 
 export type ContractDeploymentState =
   | "pending"
@@ -45,6 +50,7 @@ interface MethodExecutionStatus {
   deployedContractId: DeployedContractId;
   functionName: string;
   state: MethodExecutionState;
+  events: ExecuctionEvent[];
   gasRequired?: WeightV2;
   transactionFee?: bigint;
   transactionResult?: string;
@@ -74,10 +80,10 @@ function renderContractDeploymentStatus(
   ];
 }
 
-function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText {
+function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText[] {
   const { deployedContractId, functionName, state, transactionResult, transactionFee, failure } = methodExecutionStatus;
 
-  return [
+  const firstLine: StyledText = [
     { text: "  🧰 " },
     { text: deployedContractId, color: "blue" },
     { text: "." },
@@ -90,6 +96,28 @@ function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatu
     },
     ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
   ];
+
+  const result = [firstLine];
+
+  methodExecutionStatus.events.forEach(({ args, deployedContractId, identifier }) => {
+    result.push([
+      { text: "    🎉 Event " },
+      { text: deployedContractId, color: "blue" },
+      { text: "." },
+      { text: identifier, color: "green" },
+    ]);
+
+    args.forEach(({ name, value }) => {
+      result.push([
+        { text: "      - " },
+        { text: name },
+        { text: ": " },
+        { text: JSON.stringify(value), color: "cyan" },
+      ]);
+    });
+  });
+
+  return result;
 }
 
 export async function processScripts(
@@ -105,16 +133,31 @@ export async function processScripts(
   const compiledContracts: Record<DeployedContractId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
 
-  const updateDisplayedStatus = (asStaticText: boolean = false) => {
-    const styledTexts = executionStatuses.map((executionStatus) => {
-      switch (executionStatus.type) {
-        case "contractDeployment":
-          return renderContractDeploymentStatus(executionStatus.status, chainApi);
-
-        case "methodExecution":
-          return renderMethodExecutionStatus(executionStatus.status, chainApi);
+  const resolveContractEvent = (
+    contractAddress: string,
+    data: Buffer
+  ): [DeployedContractId, DecodedEvent] | undefined => {
+    for (const entry of Object.entries(deployedContracts)) {
+      const [deployedContractId, deployment] = entry;
+      if (addressesAreEqual(deployment.address, contractAddress, chainApi)) {
+        return [deployedContractId, deployment.abi.decodeEvent(data)];
       }
-    });
+    }
+  };
+
+  const updateDisplayedStatus = (asStaticText: boolean = false) => {
+    const styledTexts = executionStatuses
+      .map((executionStatus) => {
+        switch (executionStatus.type) {
+          case "contractDeployment":
+            return [renderContractDeploymentStatus(executionStatus.status, chainApi)];
+
+          case "methodExecution": {
+            return renderMethodExecutionStatus(executionStatus.status, chainApi);
+          }
+        }
+      })
+      .flat();
 
     if (asStaticText === true) {
       addStaticText(styledTexts, true);
@@ -162,9 +205,14 @@ export async function processScripts(
       throw new Error(`An error occurred deploying contract ${deployedContractId}`);
     }
 
+    const compiledContractFile = await readFile(compiledContractFileName);
+    const metadata = JSON.parse(compiledContractFile.toString("utf8"));
+
     const deployment: Deployment = {
       address: result.value,
       compiledContractFileName,
+      metadata,
+      abi: new Abi(metadata, chainApi.api().registry.getChainProperties()),
     };
     contractDeploymentStatus.address = result.value;
     updateContractStatus("deployed");
@@ -185,6 +233,7 @@ export async function processScripts(
       deployedContractId,
       functionName,
       state: "pending",
+      events: [],
     };
     executionStatuses.push({ type: "methodExecution", status: methodExecutionStatus });
 
@@ -198,12 +247,19 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
+    const addEvent = (event: ExecuctionEvent) => {
+      methodExecutionStatus.events.push(event);
+      updateDisplayedStatus();
+    };
+
     const { result, transactionFee } = await chainApi.executeContractFunction(
       contract,
       tx,
       functionName,
       configFile,
+      resolveContractEvent,
       updateExecutionStatus,
+      addEvent,
       ...rest
     );
 

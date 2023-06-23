@@ -1,6 +1,8 @@
 import { KeyringPair } from "@polkadot/keyring/types";
 
 import { PromiseMutex } from "./helpers/promiseMutex";
+import { Abi } from "@polkadot/api-contract";
+import { AnyJson } from "@polkadot/types-codec/types";
 
 export type DeployedContractId = string;
 export type ContractSourcecodeId = string;
@@ -20,6 +22,8 @@ export type NamedAccounts = Record<NamedAccountId, NamedAccount>;
 export interface Deployment {
   address: Address;
   compiledContractFileName: string;
+  metadata: Record<string, unknown>;
+  abi: Abi;
 }
 
 export interface TxOptions {
@@ -80,7 +84,20 @@ export interface ConfigFile {
   limits: Limits;
 }
 
+export type NamedAccountConfig =
+  | string
+  | {
+      address: string;
+      suri?: string;
+    };
+
 export interface NetworkConfig {
-  namedAccounts: Record<NamedAccountId, Address>;
+  namedAccounts: Record<NamedAccountId, NamedAccountConfig>;
   rpcUrl: string;
+}
+
+export interface ExecuctionEvent {
+  deployedContractId: DeployedContractId;
+  identifier: string;
+  args: { name: string; value: AnyJson }[];
 }

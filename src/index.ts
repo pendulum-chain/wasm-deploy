@@ -9,6 +9,7 @@ import { PromiseMutex } from "./helpers/promiseMutex";
 import { connectToChain } from "./api";
 import { createAnimatedTextContext } from "./helpers/terminal";
 import { processScripts } from "./processScripts";
+import { rawAddressesAreEqual } from "./helpers/addresses";
 export { WasmDeployEnvironment } from "./types";
 
 async function scanProjectDir(
@@ -70,10 +71,25 @@ async function main() {
 
   const namedAccounts: NamedAccounts = {};
   for (const key of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
-    const accountId = networkConfig.namedAccounts[key];
-    const rl = readline.createInterface({ input, output });
-    const suri = (await rl.question(`Enter the secret key URI for named account "${key}" (${accountId}): `)).trim();
-    rl.close();
+    const namedAccountConfig = networkConfig.namedAccounts[key];
+
+    const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig.address;
+    let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig.suri;
+    if (suri === undefined) {
+      while (true) {
+        const rl = readline.createInterface({ input, output });
+        suri = (await rl.question(`Enter the secret key URI for named account "${key}" (${accountId}): `)).trim();
+        rl.close();
+
+        const keyRingPair = chainApi.getKeyring().addFromUri(suri);
+        const publicKey = chainApi.getKeyring().addFromAddress(accountId);
+        if (!rawAddressesAreEqual(keyRingPair.addressRaw, publicKey.addressRaw)) {
+          console.log(`Invalid suri for address ${accountId}`);
+        } else {
+          break;
+        }
+      }
+    }
 
     namedAccounts[key] = {
       accountId,
