@@ -34,6 +34,12 @@ async function actuallyCompileContract(
 ): Promise<string> {
   const { contract } = args;
   const contractSourceName = configFile.contracts[contract];
+  if (contractSourceName === undefined) {
+    throw new Error(
+      `Unknown contract ${contract} - expected either one of: ${Object.keys(configFile.contracts).join(", ")}`
+    );
+  }
+
   const builtFileName = join(configFile.buildFolder, basename(contractSourceName));
 
   const wasmFileName = builtFileName.replace(/.sol$/, ".wasm");

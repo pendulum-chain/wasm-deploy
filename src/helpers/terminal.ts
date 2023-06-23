@@ -153,14 +153,14 @@ export async function createAnimatedTextContext(
 
   try {
     await execute(updateDynamicText, addStaticText);
+    updateDynamicText(lines, true);
     return true;
   } catch (error) {
-    console.error("An error occurred");
+    updateDynamicText(lines, true);
+    console.error("\nAn error occurred");
     console.error((error as Error).message);
     return false;
   } finally {
-    updateDynamicText(lines, true);
-
     if (process.stdout.isTTY) {
       showCursor();
       process.stdout.write("\n");
