@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "ts-node src/index.ts",
+    "local": "ts-node src/index.ts nabla-testing local"
   },
   "keywords": [],
   "author": "",

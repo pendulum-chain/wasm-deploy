@@ -16,3 +16,23 @@ TODO
 - transaction fee
 - textwrap
 - docs
+
+
+# Local Setup
+
+- Clone contract repos: (OR paste pre-compiled contracts in `wasm-deploy/target`. Ex: `AmberCurve.contract` and `AmberCurve.wasm`)
+    - Nabla contracts in `../clones/nabla-contracts`
+    - Nabla curve in `../clones/nabla-curve` 
+    - Pendulum-ink-wrapper in `../clones/pendulum-ink-wrapper`
+- Fix cmd in `nabla-contract` build:substrate command. Should be:
+    - "build:substrate": "solang compile --target substrate --importpath ./contracts/@chain/pendulum --importpath node_modules -o ./build/substrate -- --math-overflow ./contracts/src/**/*.sol",
+- Create deployer account with polkadot.js extension. Make sure to write down the seed phrase, you will need it.
+
+# Local Usage 
+
+- Run zombienet
+- In `nabla-testing/config.json`, update the port in `networks.local.rpcUrl`
+- Call extrinsic: `tokenAllowance::addAllowedCurrencies`  to enable assets. (must be called by `RawOrigin::Root`)
+- If no price feed data, add some by calling extrinsic: `diaOracleModule::setUpdatedCoinInfos`
+- Provide funds to deployer
+- Use `npm run local`, and paste seed phrase.
