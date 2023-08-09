@@ -24,8 +24,6 @@ TODO
     - Nabla contracts in `../clones/nabla-contracts`
     - Nabla curve in `../clones/nabla-curve` 
     - Pendulum-ink-wrapper in `../clones/pendulum-ink-wrapper`
-- Fix cmd in `nabla-contract` build:substrate command. Should be:
-    - "build:substrate": "solang compile --target substrate --importpath ./contracts/@chain/pendulum --importpath node_modules -o ./build/substrate -- --math-overflow ./contracts/src/**/*.sol",
 - Create deployer account with polkadot.js extension. Make sure to write down the seed phrase, you will need it.
 
 # Local Usage 
