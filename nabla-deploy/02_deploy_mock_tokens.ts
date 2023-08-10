@@ -13,13 +13,13 @@ async function DeployMockTokens({ getNamedAccounts, deployments }: WasmDeployEnv
   await deployments.deploy("mEUR", {
     from: deployer,
     contract: "ERC20Wrapper",
-    args: ["XCM 0", "X0", 12, [1], [0], [], []],
+    args: ["XCM0", "X0", 12, [1], [0], [], []],
     log: true,
   });
   await deployments.deploy("mETH", {
     from: deployer,
     contract: "ERC20Wrapper",
-    args: ["XCM 1", "X1", 12, [1], [1], [], []],
+    args: ["XCM1", "X1", 12, [1], [1], [], []],
     log: true,
   });
 }

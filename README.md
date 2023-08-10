@@ -30,7 +30,10 @@ TODO
 
 - Run zombienet
 - In `nabla-testing/config.json`, update the port in `networks.local.rpcUrl`
-- Call extrinsic: `tokenAllowance::addAllowedCurrencies`  to enable assets. (must be called by `RawOrigin::Root`)
-- If no price feed data, add some by calling extrinsic: `diaOracleModule::setUpdatedCoinInfos`
+- Call extrinsic: `tokenAllowance::addAllowedCurrencies`  to enable assets. (must be called by `RawOrigin::Root`) Add: `Native`, `XCM(0)`, `XCM(1)`
+- Call extrinsic: `diaOracleModule::setUpdatedCoinInfos` to add price feeds. Add: 
+    - Blockchain: `Native`, Symbol: `NAT`
+    - Blockchain: `XCM0`, Symbol: `X0`
+    - Blockchain: `XCM1`, Symbol: `X1`
 - Provide funds to deployer
 - Use `npm run local`, and paste seed phrase.
