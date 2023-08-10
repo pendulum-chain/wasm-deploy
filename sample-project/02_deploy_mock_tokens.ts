@@ -28,7 +28,7 @@ DeployMockTokens.tags = ["tokens"];
 
 DeployMockTokens.skip = async function skip({ deployments, network }: WasmDeployEnvironment): Promise<boolean> {
   const alreadyDeployed = Boolean(await deployments.getOrNull("mETH"));
-  return !isTestnet(network) || alreadyDeployed;
+  return alreadyDeployed;
 };
 
 export default DeployMockTokens;

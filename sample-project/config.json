@@ -14,6 +14,12 @@
         "deployer": "6iFKMtX29zYoHRgDkPTXKuRsHRbJ3Gnaxyc4dRrZTANHvZi3"
       },
       "rpcUrl": "wss://rpc-foucoco.pendulumchain.tech:443"
+    },
+    "local": {
+      "namedAccounts": {
+        "deployer": "5CV9tFvm5RjXjgkdu3uboZr9dMDAfm9YPgQoL5jvMzG1jKzL"
+      },
+      "rpcUrl": "ws://localhost:53523"
     }
   },
   "buildFolder": "./target",

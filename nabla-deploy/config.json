@@ -21,7 +21,7 @@
       "namedAccounts": {
         "deployer": "5CV9tFvm5RjXjgkdu3uboZr9dMDAfm9YPgQoL5jvMzG1jKzL"
       },
-      "rpcUrl": "ws://localhost:49467"
+      "rpcUrl": "ws://localhost:53523"
     }
   },
   "buildFolder": "./target",

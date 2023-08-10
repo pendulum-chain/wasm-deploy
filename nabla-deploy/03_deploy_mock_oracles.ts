@@ -14,9 +14,9 @@ async function DeployMockOracles({ getNamedAccounts, deployments }: WasmDeployEn
     from: deployer,
     contract: "PriceFeedWrapper",
     args: [[
-      {address: mUSD.address, blockchain: "USD-Blockchain", symbol: "USD-Symbol"},
-      {address: mEUR.address, blockchain: "EUR-Blockchain", symbol: "EUR-Symbol"},
-      {address: mETH.address, blockchain: "ETH-Blockchain", symbol: "ETH-Symbol"}
+      {asset: mUSD.address, blockchain: "Native", symbol: "NAT"}, 
+      {asset: mEUR.address, blockchain: "XCM 0", symbol: "X0"}, 
+      {asset: mETH.address, blockchain: "XCM 1", symbol: "X1"}, 
     ]],
     log: true,
   });

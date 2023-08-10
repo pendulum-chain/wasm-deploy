@@ -31,7 +31,7 @@ export interface TxOptions {
   log?: boolean;
 }
 
-export type ArgumentType = string | number | bigint;
+export type ArgumentType = string | number | bigint | Array<ArgumentType> | Object;
 
 export interface DeploymentArguments {
   from: NamedAccount;

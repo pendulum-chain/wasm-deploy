@@ -45,7 +45,7 @@ DeployMockOracles.tags = ["oracles"];
 
 DeployMockOracles.skip = async function skip({ deployments, network }: WasmDeployEnvironment): Promise<boolean> {
   const alreadyDeployed = Boolean(await deployments.getOrNull("compatOracle"));
-  return !isTestnet(network) || alreadyDeployed;
+  return alreadyDeployed;
 };
 
 export default DeployMockOracles;

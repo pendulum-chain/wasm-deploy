@@ -20,7 +20,7 @@ TODO
 
 # Local Setup
 
-- Clone contract repos: (OR paste pre-compiled contracts in `wasm-deploy/target`. Ex: `AmberCurve.contract` and `AmberCurve.wasm`)
+- Clone contract repos: (OR paste pre-compiled contracts in `wasm-deploy/target`. Ex: `AmberCurve.contract`, but you'll still need a `.sol` file for it in the expected path, containing only `abstract contract AmberCurve {}`)
     - Nabla contracts in `../clones/nabla-contracts`
     - Nabla curve in `../clones/nabla-curve` 
     - Pendulum-ink-wrapper in `../clones/pendulum-ink-wrapper`
