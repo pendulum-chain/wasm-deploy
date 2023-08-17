@@ -36,4 +36,8 @@ TODO
     - Blockchain: `XCM0`, Symbol: `X0`
     - Blockchain: `XCM1`, Symbol: `X1`
 - Provide funds to deployer
-- Use `npm run local`, and paste seed phrase.
+- To deploy Nabla, `npm run deploy-local`, and paste seed phrase.
+- To run Nabla tests:
+    - `npm run test-backstop-local`, and paste seed phrase.
+    - `npm run test-swappool-local`, and paste seed phrase.
+    - `npm run test-swaps-local`, and paste seed phrase.
