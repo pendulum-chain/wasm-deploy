@@ -21,14 +21,14 @@
       "namedAccounts": {
         "deployer": "5CV9tFvm5RjXjgkdu3uboZr9dMDAfm9YPgQoL5jvMzG1jKzL"
       },
-      "rpcUrl": "ws://localhost:53523"
+      "rpcUrl": "ws://localhost:60009"
     }
   },
   "buildFolder": "./target",
   "limits": {
     "gas": {
       "refTime": "100000000000",
-      "proofSize": "1000000"
+      "proofSize": "2000000"
     },
     "storageDeposit": "10000000000000"
   }
