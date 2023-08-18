@@ -4,6 +4,7 @@ import { CodePromise, ContractPromise } from "@polkadot/api-contract";
 import { AccountId, AccountId32, DispatchInfo, Event, WeightV2 } from "@polkadot/types/interfaces";
 import { DispatchError } from "@polkadot/types/interfaces";
 import { INumber, ITuple } from "@polkadot/types-codec/types";
+import { Abi } from "@polkadot/api-contract";
 
 import { readFile } from "node:fs/promises";
 import {
@@ -153,7 +154,15 @@ export async function connectToChain(rpcUrl: string) {
       compiledContractFileName: string,
       deploymentArguments: DeploymentArguments,
       configFile: ConfigFile,
-      updateContractStatus: (status: ContractDeploymentState) => void
+      updateContractStatus: (status: ContractDeploymentState) => void,
+      resolveContractEvent: (
+        contractAddress: string,
+        data: Buffer,
+        extra?: { id: string; address: string; abi: Abi }
+      ) => [DeployedContractId, DecodedEvent] | undefined,
+      addEvent: (event: ExecuctionEvent) => void,
+      abiObject: Abi,
+      contractId: string
     ) {
       const deployer = deploymentArguments.from;
       if (deployer === undefined) {
@@ -184,15 +193,45 @@ export async function connectToChain(rpcUrl: string) {
           updateContractStatus("deploying");
         },
         (events: Event[]) => {
+          let deploymentAddress: Address | undefined = undefined;
+
           for (const event of events) {
             const { data, section, method } = event;
             if (section === "contracts" && method === "Instantiated") {
               const [, contract] = data as unknown as ITuple<[AccountId, AccountId]>;
-              return contract.toString() as Address;
+              deploymentAddress = contract.toString() as Address;
             }
           }
 
-          throw new Error("Contract address not found");
+          if (deploymentAddress === undefined) {
+            throw new Error("Contract address not found");
+          }
+
+          for (const event of events) {
+            const { data, section, method } = event;
+
+            if (section === "contracts" && method === "ContractEmitted") {
+              const dataJson = data.toHuman() as { contract: string; data: string };
+              const message = resolveContractEvent(dataJson.contract, Buffer.from(dataJson.data.slice(2), "hex"), {
+                id: contractId,
+                address: deploymentAddress,
+                abi: abiObject,
+              });
+              if (message !== undefined) {
+                const [deployedContractId, decodedEvent] = message;
+                addEvent({
+                  args: decodedEvent.event.args.map((arg, index) => ({
+                    name: arg.name,
+                    value: decodedEvent.args[index].toHuman(),
+                  })),
+                  deployedContractId,
+                  identifier: decodedEvent.event.identifier,
+                });
+              }
+            }
+          }
+
+          return deploymentAddress;
         }
       );
     },
@@ -228,14 +267,6 @@ export async function connectToChain(rpcUrl: string) {
       );
 
       updateExecutionStatus("gas estimated", queryResult.gasRequired);
-
-      /*const extrinsic = contract.tx[functionName](
-        {
-          storageDepositLimit,
-          gasLimit: queryResult.gasRequired,
-        },
-        ...rest
-      );*/
 
       const typesAddress = api.registry.createType("AccountId", address);
       const extrinsic = api.tx.contracts.call(

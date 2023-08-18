@@ -1,7 +1,7 @@
 import { DeploymentsExtension, Network, TxOptions } from "../src/types";
 
 export function isTestnet(network: Network) {
-  return ["foucoco"].includes(network.name.toLowerCase());
+  return ["foucoco", "local"].includes(network.name.toLowerCase());
 }
 
 export async function registerAsset(

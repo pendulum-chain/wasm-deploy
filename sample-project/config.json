@@ -14,13 +14,22 @@
         "deployer": "6iFKMtX29zYoHRgDkPTXKuRsHRbJ3Gnaxyc4dRrZTANHvZi3"
       },
       "rpcUrl": "wss://rpc-foucoco.pendulumchain.tech:443"
+    },
+    "local": {
+      "namedAccounts": {
+        "deployer": {
+          "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+          "suri": "//Alice"
+        }
+      },
+      "rpcUrl": "ws://127.0.0.1:9944"
     }
   },
   "buildFolder": "./target",
   "limits": {
     "gas": {
       "refTime": "100000000000",
-      "proofSize": "1000000"
+      "proofSize": "2000000"
     },
     "storageDeposit": "10000000000000"
   }

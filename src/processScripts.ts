@@ -42,6 +42,7 @@ interface ContractDeploymentStatus {
   address?: Address;
   failure?: string;
   transactionFee?: bigint;
+  events: ExecuctionEvent[];
 }
 
 export type MethodExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
@@ -57,49 +58,16 @@ interface MethodExecutionStatus {
   failure?: string;
 }
 
+const SHOW_ESTIMATED_GAS = true;
+
 type ExecutionStatus =
   | { type: "contractDeployment"; status: ContractDeploymentStatus }
   | { type: "methodExecution"; status: MethodExecutionStatus };
 
-function renderContractDeploymentStatus(
-  contractDeploymentStatus: ContractDeploymentStatus,
-  chainApi: ChainApi
-): StyledText {
-  const { contractFileId, deployedContractId, state, address, transactionFee, failure } = contractDeploymentStatus;
-  return [
-    { text: "  📝 " },
-    { text: deployedContractId, color: "blue" },
-    { text: ` (source: ${contractFileId})` },
-    ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
-    {
-      text: ` ${failure ?? state}`,
-      color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
-      spinning: state === "compiling" || state === "optimizing" || state === "deploying",
-    },
-    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
-  ];
-}
+function renderEvents(events: ExecuctionEvent[]): StyledText[] {
+  const result: StyledText[] = [];
 
-function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText[] {
-  const { deployedContractId, functionName, state, transactionResult, transactionFee, failure } = methodExecutionStatus;
-
-  const firstLine: StyledText = [
-    { text: "  🧰 " },
-    { text: deployedContractId, color: "blue" },
-    { text: "." },
-    { text: functionName, color: "green" },
-    ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
-    {
-      text: ` ${failure ?? state}`,
-      color: state === "success" ? "green" : state === "failure" ? "red" : "yellow",
-      spinning: state === "dry running" || state === "submitting",
-    },
-    ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
-  ];
-
-  const result = [firstLine];
-
-  methodExecutionStatus.events.forEach(({ args, deployedContractId, identifier }) => {
+  events.forEach(({ args, deployedContractId, identifier }) => {
     result.push([
       { text: "    🎉 Event " },
       { text: deployedContractId, color: "blue" },
@@ -120,6 +88,57 @@ function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatu
   return result;
 }
 
+function renderContractDeploymentStatus(
+  contractDeploymentStatus: ContractDeploymentStatus,
+  chainApi: ChainApi
+): StyledText[] {
+  const { contractFileId, deployedContractId, state, address, transactionFee, failure } = contractDeploymentStatus;
+  const firstLine: StyledText = [
+    { text: "  📝 " },
+    { text: deployedContractId, color: "blue" },
+    { text: ` (source: ${contractFileId})` },
+    ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
+    {
+      text: ` ${failure ?? state}`,
+      color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
+      spinning: state === "compiling" || state === "optimizing" || state === "deploying",
+    },
+    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
+  ];
+
+  return [firstLine, ...renderEvents(contractDeploymentStatus.events)];
+}
+
+function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText[] {
+  const { deployedContractId, functionName, state, transactionResult, transactionFee, failure, gasRequired } =
+    methodExecutionStatus;
+
+  const firstLine: StyledText = [
+    { text: "  🧰 " },
+    { text: deployedContractId, color: "blue" },
+    { text: "." },
+    { text: functionName, color: "green" },
+    ...(transactionFee !== undefined || (gasRequired !== undefined && SHOW_ESTIMATED_GAS)
+      ? [
+          { text: ` [` },
+          ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
+          ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
+            ? [{ text: ` gasTime: ${gasRequired.refTime.toHuman()} gasProof: ${gasRequired.proofSize.toHuman()}` }]
+            : []),
+          { text: ` ]` },
+        ]
+      : []),
+    {
+      text: ` ${failure ?? state}`,
+      color: state === "success" ? "green" : state === "failure" ? "red" : "yellow",
+      spinning: state === "dry running" || state === "submitting",
+    },
+    ...(transactionResult !== undefined ? [{ text: `, result: ${transactionResult}` }] : []),
+  ];
+
+  return [firstLine, ...renderEvents(methodExecutionStatus.events)];
+}
+
 export async function processScripts(
   scripts: [ScriptName, DeployScript][],
   getNamedAccounts: () => Promise<NamedAccounts>,
@@ -135,8 +154,13 @@ export async function processScripts(
 
   const resolveContractEvent = (
     contractAddress: string,
-    data: Buffer
+    data: Buffer,
+    extra?: { id: string; address: string; abi: Abi }
   ): [DeployedContractId, DecodedEvent] | undefined => {
+    if (extra !== undefined && addressesAreEqual(extra.address, contractAddress, chainApi)) {
+      return [extra.id, extra.abi.decodeEvent(data)];
+    }
+
     for (const entry of Object.entries(deployedContracts)) {
       const [deployedContractId, deployment] = entry;
       if (addressesAreEqual(deployment.address, contractAddress, chainApi)) {
@@ -150,7 +174,7 @@ export async function processScripts(
       .map((executionStatus) => {
         switch (executionStatus.type) {
           case "contractDeployment":
-            return [renderContractDeploymentStatus(executionStatus.status, chainApi)];
+            return renderContractDeploymentStatus(executionStatus.status, chainApi);
 
           case "methodExecution": {
             return renderMethodExecutionStatus(executionStatus.status, chainApi);
@@ -179,6 +203,7 @@ export async function processScripts(
       deployedContractId,
       contractFileId: args.contract,
       state: "pending",
+      events: [],
     };
     executionStatuses.push({ type: "contractDeployment", status: contractDeploymentStatus });
 
@@ -189,12 +214,25 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
+    const addEvent = (event: ExecuctionEvent) => {
+      contractDeploymentStatus.events.push(event);
+      updateDisplayedStatus();
+    };
+
     const compiledContractFileName = await compileContract(args, configFile, compiledContracts, updateContractStatus);
+    const compiledContractFile = await readFile(compiledContractFileName);
+    const metadata = JSON.parse(compiledContractFile.toString("utf8"));
+    const abi = new Abi(metadata, chainApi.api().registry.getChainProperties());
+
     const { result, transactionFee } = await chainApi.instantiateWithCode(
       compiledContractFileName,
       args,
       configFile,
-      updateContractStatus
+      updateContractStatus,
+      resolveContractEvent,
+      addEvent,
+      abi,
+      deployedContractId
     );
 
     contractDeploymentStatus.transactionFee = transactionFee;
@@ -205,14 +243,11 @@ export async function processScripts(
       throw new Error(`An error occurred deploying contract ${deployedContractId}`);
     }
 
-    const compiledContractFile = await readFile(compiledContractFileName);
-    const metadata = JSON.parse(compiledContractFile.toString("utf8"));
-
     const deployment: Deployment = {
       address: result.value,
       compiledContractFileName,
       metadata,
-      abi: new Abi(metadata, chainApi.api().registry.getChainProperties()),
+      abi,
     };
     contractDeploymentStatus.address = result.value;
     updateContractStatus("deployed");
