@@ -1,6 +1,6 @@
 # wasm-deploy
 
-Usage `npm start sample-project foucoco`
+Usage for the example project: `npx ts-node src/index.ts deploy sample-project --network local`
 
 ## Foucoco
 
@@ -9,10 +9,3 @@ Usage `npm start sample-project foucoco`
 ```
 brew install binaryen
 ```
-
-TODO
-
-- password
-- transaction fee
-- textwrap
-- docs

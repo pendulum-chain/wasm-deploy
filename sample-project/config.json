@@ -7,7 +7,7 @@
     "BackstopPool": "../../clones/nabla-contracts/contracts/src/core/BackstopPool.sol",
     "SwapPool": "../../clones/nabla-contracts/contracts/src/core/SwapPool.sol"
   },
-  "importpaths": ["../clones/nabla-contracts/contracts/@chain/pendulum", "node_modules/"],
+  "importpaths": ["../../clones/nabla-contracts/contracts/@chain/pendulum", "../node_modules/"],
   "networks": {
     "foucoco": {
       "namedAccounts": {

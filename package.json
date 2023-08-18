@@ -24,6 +24,7 @@
     "@polkadot/util": "^12.3.2",
     "@polkadot/util-crypto": "^12.3.2",
     "blake2b": "^2.1.4",
+    "commander": "^11.0.0",
     "ts-node": "^10.9.1"
   }
 }
