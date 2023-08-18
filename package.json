@@ -6,10 +6,10 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "mock": "ts-node src/index.ts sample-project local",
-    "deploy-local": "ts-node src/index.ts nabla-deploy local",
-    "test-backstop-local": "ts-node src/index.ts nabla-tests-backstop local",
-    "test-swappool-local": "ts-node src/index.ts nabla-tests-swappool local",
-    "test-swaps-local": "ts-node src/index.ts nabla-tests-swaps local"
+    "deploy:local": "ts-node src/index.ts tests/nabla/setup local",
+    "test:backstop-local": "ts-node src/index.ts tests/nabla/backstop-pool local",
+    "test:swappool-local": "ts-node src/index.ts tests/nabla/swap-pool local",
+    "test:swaps-local": "ts-node src/index.ts tests/nabla/swaps local"
   },
   "keywords": [],
   "author": "",
