@@ -56,6 +56,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
   const configFile: ConfigFile = await import(configFilePath);
   const buildFolder = join(projectFolder, configFile.buildFolder);
   const gitFolder = join(buildFolder, "git");
+  const tempFolder = join(buildFolder, "temp");
   const importpaths = (configFile.importpaths ?? []).map((importpath) => join(projectFolder, importpath));
 
   const getContractSourceReference = (contractId: ContractSourcecodeId): ContractSourceReference => {
@@ -78,6 +79,10 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
     getGitFolder() {
       return gitFolder;
+    },
+
+    getTempFolder() {
+      return tempFolder;
     },
 
     getContracts(): ContractSourcecodeId[] {

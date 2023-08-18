@@ -1,5 +1,5 @@
 import { join, basename } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename } from "node:fs/promises";
 import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
@@ -36,11 +36,14 @@ async function actuallyCompileContract(
   const { contract } = args;
 
   const contractSourceName = project.getContractSourcePath(contract);
-  const builtFileName = join(project.getBuildFolder(), basename(contractSourceName));
+  const builtFileName = join(project.getTempFolder(), basename(contractSourceName));
 
-  const wasmFileName = builtFileName.replace(/.sol$/, ".wasm");
-  const optimizedWasmFileName = builtFileName.replace(/.sol$/, ".optimized.wasm");
-  const metadataFileName = builtFileName.replace(/.sol$/, ".contract");
+  const builtWasmFileName = builtFileName.replace(/.sol$/, ".wasm");
+  const builtMetadataFileName = builtFileName.replace(/.sol$/, ".contract");
+
+  const wasmFileName = join(project.getBuildFolder(), `${contract}.wasm`);
+  const metadataFileName = join(project.getBuildFolder(), `${contract}.contract`);
+  const optimizedWasmFileName = join(project.getBuildFolder(), `${contract}.optimized.wasm`);
 
   const importpaths = project.getImportPaths();
   updateContractStatus("compiling");
@@ -53,7 +56,7 @@ async function actuallyCompileContract(
     "aggressive",
     "--release",
     "--output",
-    project.getBuildFolder(),
+    project.getTempFolder(),
     ...importpaths.map((path) => ["--importpath", path]).flat(),
     contractSourceName,
   ]);
@@ -62,6 +65,8 @@ async function actuallyCompileContract(
   if (solangResult.exitCode !== 0) {
     throw new Error(`Solang error: ${solangResult.stdout}, ${solangResult.stderr}`);
   }
+
+  await Promise.all([rename(builtWasmFileName, wasmFileName), rename(builtMetadataFileName, metadataFileName)]);
 
   updateContractStatus("optimizing");
   const wasmOptResult = await runCommand([
