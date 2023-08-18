@@ -41,7 +41,18 @@ async function scanProjectDir(
   }
 
   if (configFile === undefined) {
-    throw new Error("No config.json file found in project directory");
+    // Try to find config.json in parent directory
+    const parentDir = join(projectDir, "..");
+    try {
+      configFile = await import(join(parentDir, "config.json"));
+    } catch (error) {
+        // Ignore error
+    }
+
+    // If config.json is still undefined, throw an error
+    if (configFile === undefined) {
+      throw new Error("No config.json file found in project directory");
+    }
   }
 
   for (const contractName of Object.keys(configFile.contracts) as ContractSourcecodeId[]) {
