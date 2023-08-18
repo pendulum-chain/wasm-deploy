@@ -844,6 +844,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"typescript@npm:^4.4.3":
+  version: 4.9.5
+  resolution: "typescript@npm:4.9.5"
+  bin:
+    tsc: bin/tsc
+    tsserver: bin/tsserver
+  checksum: 550217a465c00b1d7ef0e0ddc3a6a0b2ae1fd7c1b9f53cde5a1cfe56aa457c7a43fa83792c1b98b2185d2156d0467c9ad6f6600515ad4f4fc2acee54c4bd320e
+  languageName: node
+  linkType: hard
+
+"typescript@patch:typescript@npm%3A^4.4.3#optional!builtin<compat/typescript>":
+  version: 4.9.5
+  resolution: "typescript@patch:typescript@npm%3A4.9.5#optional!builtin<compat/typescript>::version=4.9.5&hash=23ec76"
+  bin:
+    tsc: bin/tsc
+    tsserver: bin/tsserver
+  checksum: 09f82f25664c79d5cccc389502175093becf51d691b443c79294303681544a399fb42f8384b535ddeba48cadb64e7d14b42de40d8ade4418bb43174989dd8685
+  languageName: node
+  linkType: hard
+
 "v8-compile-cache-lib@npm:^3.0.1":
   version: 3.0.1
   resolution: "v8-compile-cache-lib@npm:3.0.1"
@@ -868,6 +888,7 @@ __metadata:
     "@types/node": "npm:^20.3.1"
     blake2b: "npm:^2.1.4"
     ts-node: "npm:^10.9.1"
+    typescript: "npm:^4.4.3"
   languageName: unknown
   linkType: soft
 
