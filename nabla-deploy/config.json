@@ -3,7 +3,7 @@
     "Router": "../../clones/nabla-contracts/contracts/src/core/Router.sol",
     "MockERC20": "../../clones/nabla-contracts/contracts/src/mock/MockERC20.sol",
     "ChainlinkAdapter": "../../clones/nabla-contracts/contracts/src/compat/ChainlinkAdapter.sol",
-    "AmberCurve": "../../clones/nabla-curve/src/AmberCurve.sol",
+    "AmberCurve": "../../clones/nabla-curve/src/NablaCurve.sol",
     "BackstopPool": "../../clones/nabla-contracts/contracts/src/core/BackstopPool.sol",
     "SwapPool": "../../clones/nabla-contracts/contracts/src/core/SwapPool.sol",
     "ERC20Wrapper": "../../clones/pendulum-ink-wrapper/erc20-wrapper/ERC20Wrapper.sol",
