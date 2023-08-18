@@ -1,11 +1,35 @@
 {
   "contracts": {
-    "Router": "../../clones/nabla-contracts/contracts/src/core/Router.sol",
-    "MockERC20": "../../clones/nabla-contracts/contracts/src/mock/MockERC20.sol",
-    "ChainlinkAdapter": "../../clones/nabla-contracts/contracts/src/compat/ChainlinkAdapter.sol",
-    "AmberCurve": "../../clones/nabla-curve/src/AmberCurve.sol",
-    "BackstopPool": "../../clones/nabla-contracts/contracts/src/core/BackstopPool.sol",
-    "SwapPool": "../../clones/nabla-contracts/contracts/src/core/SwapPool.sol"
+    "Router": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "path": "contracts/src/core/Router.sol",
+      "branch": "main"
+    },
+    "MockERC20": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "path": "contracts/src/mock/MockERC20.sol",
+      "branch": "main"
+    },
+    "ChainlinkAdapter": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "path": "contracts/src/compat/ChainlinkAdapter.sol",
+      "branch": "main"
+    },
+    "AmberCurve": {
+      "git": "https://github.com/0xamberhq/curve",
+      "path": "src/NablaCurve.sol",
+      "branch": "main"
+    },
+    "BackstopPool": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "path": "contracts/src/core/BackstopPool.sol",
+      "branch": "main"
+    },
+    "SwapPool": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "path": "contracts/src/core/SwapPool.sol",
+      "branch": "main"
+    }
   },
   "importpaths": ["../../clones/nabla-contracts/contracts/@chain/pendulum", "../node_modules/"],
   "networks": {
@@ -25,7 +49,7 @@
       "rpcUrl": "ws://127.0.0.1:9944"
     }
   },
-  "buildFolder": "./target",
+  "buildFolder": "../target",
   "limits": {
     "gas": {
       "refTime": "100000000000",
