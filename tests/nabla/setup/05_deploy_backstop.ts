@@ -1,4 +1,4 @@
-import { WasmDeployEnvironment } from "../src/index";
+import { WasmDeployEnvironment } from "../../../src";
 
 async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();

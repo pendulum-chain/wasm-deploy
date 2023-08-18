@@ -1,5 +1,5 @@
-import { WasmDeployEnvironment } from "../src/index";
-import { setSwapFees } from "./_lib";
+import { WasmDeployEnvironment } from "../../../src";
+import { setSwapFees } from "../_lib";
 
 async function SetSwapFees({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();

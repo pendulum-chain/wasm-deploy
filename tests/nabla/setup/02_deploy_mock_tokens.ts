@@ -1,5 +1,4 @@
-import { WasmDeployEnvironment } from "../src/index";
-import { isTestnet } from "./_lib";
+import { WasmDeployEnvironment } from "../../../src";
 
 async function DeployMockTokens({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
