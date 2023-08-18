@@ -68,34 +68,6 @@ export interface DeployScript {
   default: DeployScriptFunction;
 }
 
-export interface Limits {
-  gas: {
-    refTime: number | string;
-    proofSize: number | string;
-  };
-  storageDeposit?: number | string | null;
-}
-
-export interface ConfigFile {
-  contracts: Record<ContractSourcecodeId, string>;
-  importpaths: string[];
-  networks: Record<string, NetworkConfig>;
-  buildFolder: string;
-  limits: Limits;
-}
-
-export type NamedAccountConfig =
-  | string
-  | {
-      address: string;
-      suri?: string;
-    };
-
-export interface NetworkConfig {
-  namedAccounts: Record<NamedAccountId, NamedAccountConfig>;
-  rpcUrl: string;
-}
-
 export interface ExecuctionEvent {
   deployedContractId: DeployedContractId;
   identifier: string;

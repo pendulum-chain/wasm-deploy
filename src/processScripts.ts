@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 
 import {
   Address,
-  ConfigFile,
   ContractSourcecodeId,
   DeployScript,
   DeployedContractId,
@@ -24,6 +23,7 @@ import { compileContract } from "./actions/compileContract";
 import { addressesAreEqual } from "./helpers/addresses";
 import { Abi } from "@polkadot/api-contract";
 import { DecodedEvent } from "@polkadot/api-contract/types";
+import { ConfigFile, Project } from "./project";
 
 export type ContractDeploymentState =
   | "pending"
@@ -143,7 +143,7 @@ export async function processScripts(
   scripts: [ScriptName, DeployScript][],
   getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
-  configFile: ConfigFile,
+  project: Project,
   chainApi: ChainApi,
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
@@ -219,7 +219,7 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const compiledContractFileName = await compileContract(args, configFile, compiledContracts, updateContractStatus);
+    const compiledContractFileName = await compileContract(args, project, compiledContracts, updateContractStatus);
     const compiledContractFile = await readFile(compiledContractFileName);
     const metadata = JSON.parse(compiledContractFile.toString("utf8"));
     const abi = new Abi(metadata, chainApi.api().registry.getChainProperties());
@@ -227,7 +227,7 @@ export async function processScripts(
     const { result, transactionFee } = await chainApi.instantiateWithCode(
       compiledContractFileName,
       args,
-      configFile,
+      project,
       updateContractStatus,
       resolveContractEvent,
       addEvent,
@@ -291,7 +291,7 @@ export async function processScripts(
       contract,
       tx,
       functionName,
-      configFile,
+      project,
       resolveContractEvent,
       updateExecutionStatus,
       addEvent,

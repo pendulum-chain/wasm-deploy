@@ -9,7 +9,6 @@ import { Abi } from "@polkadot/api-contract";
 import { readFile } from "node:fs/promises";
 import {
   Address,
-  ConfigFile,
   DeployedContractId,
   Deployment,
   DeploymentArguments,
@@ -22,6 +21,7 @@ import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
 import { computeQuotient } from "./helpers/rationals";
 import { DecodedEvent } from "@polkadot/api-contract/types";
+import { ConfigFile, Project } from "./project";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
@@ -153,7 +153,7 @@ export async function connectToChain(rpcUrl: string) {
     async instantiateWithCode(
       compiledContractFileName: string,
       deploymentArguments: DeploymentArguments,
-      configFile: ConfigFile,
+      project: Project,
       updateContractStatus: (status: ContractDeploymentState) => void,
       resolveContractEvent: (
         contractAddress: string,
@@ -181,7 +181,7 @@ export async function connectToChain(rpcUrl: string) {
         throw new Error(`Contract has no constructor called ${constructorName}`);
       }
 
-      const { gas, storageDeposit: storageDepositLimit } = configFile.limits;
+      const { gas, storageDeposit: storageDepositLimit } = project.getLimits();
       const gasLimit = api.createType("WeightV2", gas) as WeightV2;
 
       const extrinsic = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...deploymentArguments.args);
@@ -240,7 +240,7 @@ export async function connectToChain(rpcUrl: string) {
       deployment: Deployment,
       tx: TxOptions,
       functionName: string,
-      configFile: ConfigFile,
+      project: Project,
       resolveContractEvent: (contractAddress: string, data: Buffer) => [DeployedContractId, DecodedEvent] | undefined,
       updateExecutionStatus: (state: MethodExecutionState, gasRequired?: WeightV2, transactionResult?: string) => void,
       addEvent: (event: ExecuctionEvent) => void,
@@ -256,7 +256,7 @@ export async function connectToChain(rpcUrl: string) {
 
       const contract = new ContractPromise(api, metadata, address);
 
-      const { gas, storageDeposit: storageDepositLimit } = configFile.limits;
+      const { gas, storageDeposit: storageDepositLimit } = project.getLimits();
       const queryResult = await contract.query[functionName](
         deployer.keypair.address,
         {

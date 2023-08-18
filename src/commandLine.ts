@@ -28,6 +28,4 @@ export function parseCommandLine() {
     });
 
   program.parse();
-
-  console.log("last", program.opts());
 }

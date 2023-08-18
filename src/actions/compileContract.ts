@@ -3,12 +3,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
-import { ConfigFile, DeploymentArguments } from "../types";
+import { DeploymentArguments } from "../types";
 import { ContractDeploymentState } from "../processScripts";
+import { ConfigFile, Project } from "../project";
 
 export async function compileContract(
   args: DeploymentArguments,
-  configFile: ConfigFile,
+  project: Project,
   compiledContracts: Record<string, Promise<string>>,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
@@ -18,7 +19,7 @@ export async function compileContract(
   if (uploadedCodePromise === undefined) {
     let resolve: (value: string) => void;
     compiledContracts[contract] = new Promise<string>((_resolve) => (resolve = _resolve));
-    const codeHash = await actuallyCompileContract(args, configFile, updateContractStatus);
+    const codeHash = await actuallyCompileContract(args, project, updateContractStatus);
     resolve!(codeHash);
 
     return codeHash;
@@ -29,24 +30,19 @@ export async function compileContract(
 
 async function actuallyCompileContract(
   args: DeploymentArguments,
-  configFile: ConfigFile,
+  project: Project,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
   const { contract } = args;
-  const contractSourceName = configFile.contracts[contract];
-  if (contractSourceName === undefined) {
-    throw new Error(
-      `Unknown contract ${contract} - expected either one of: ${Object.keys(configFile.contracts).join(", ")}`
-    );
-  }
 
-  const builtFileName = join(configFile.buildFolder, basename(contractSourceName));
+  const contractSourceName = project.getContractSourcePath(contract);
+  const builtFileName = join(project.getBuildFolder(), basename(contractSourceName));
 
   const wasmFileName = builtFileName.replace(/.sol$/, ".wasm");
   const optimizedWasmFileName = builtFileName.replace(/.sol$/, ".optimized.wasm");
   const metadataFileName = builtFileName.replace(/.sol$/, ".contract");
 
-  const { importpaths } = configFile;
+  const importpaths = project.getImportPaths();
   updateContractStatus("compiling");
   const solangResult = await runCommand([
     "solang",
@@ -57,7 +53,7 @@ async function actuallyCompileContract(
     "aggressive",
     "--release",
     "--output",
-    configFile.buildFolder,
+    project.getBuildFolder(),
     ...importpaths.map((path) => ["--importpath", path]).flat(),
     contractSourceName,
   ]);
