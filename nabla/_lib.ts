@@ -13,15 +13,6 @@ export async function registerAsset(
   return await deployments.execute("router", tx, "setPriceOracle", tokenAddr, oracleAddr);
 }
 
-export async function registerPriceFeed(
-  deployments: DeploymentsExtension,
-  tx: TxOptions,
-  assetAddr: string,
-  priceFeedAddr: string
-) {
-  return await deployments.execute("compatOracle", tx, "registerPriceFeed", assetAddr, priceFeedAddr);
-}
-
 export async function registerSwapPool(
   deployments: DeploymentsExtension,
   tx: TxOptions,
