@@ -4,7 +4,7 @@
       "repository": "nablaContracts",
       "path": "contracts/src/core/Router.sol"
     },
-    "AmberCurve": {
+    "NablaCurve": {
       "repository": "nablaCurve",
       "path": "src/NablaCurve.sol"
     },
@@ -23,6 +23,22 @@
     "PriceOracleWrapper": {
       "repository": "pendulumWrappers",
       "path": "price-oracle-wrapper/PriceOracleWrapper.sol"
+    },
+    "TestableBackstopPool": {
+      "repository": "nablaContracts",
+      "path": "contracts/test/lib/TestableBackstopPool.sol"
+    },
+    "TestableSwapPool": {
+      "repository": "nablaContracts",
+      "path": "contracts/test/lib/TestableSwapPool.sol"
+    },
+    "MockERC20": {
+      "repository": "nablaContracts",
+      "path": "contracts/src/mock/MockERC20.sol"
+    },
+    "MockOracle": {
+      "repository": "nablaContracts",
+      "path": "contracts/src/mock/MockOracle.sol"
     }
   },
   "repositories": {
@@ -51,8 +67,12 @@
     "local": {
       "namedAccounts": {
         "deployer": {
-          "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+          "address": "6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr",
           "suri": "//Alice"
+        },
+        "bob": {
+          "address": "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT",
+          "suri": "//Bob"
         }
       },
       "rpcUrl": "ws://127.0.0.1:9944"
@@ -65,7 +85,7 @@
   "limits": {
     "gas": {
       "refTime": "100000000000",
-      "proofSize": "2000000"
+      "proofSize": "10000000"
     },
     "storageDeposit": "10000000000000"
   }

@@ -123,7 +123,8 @@ export async function connectToChain(rpcUrl: string) {
     .toArray()
     .map((i) => i.toNumber());
 
-  const tokenDivider = tokenDecimals[0] !== undefined ? 10n ** BigInt(tokenDecimals[0]) : 12n;
+  const unit = 10n ** (tokenDecimals[0] !== undefined ? BigInt(tokenDecimals[0]) : 12n);
+  const milliUnit = 10n ** (tokenDecimals[0] !== undefined ? BigInt(tokenDecimals[0] - 3) : 9n);
 
   const tokenSymbols = chainProperties.tokenSymbol
     .unwrapOrDefault()
@@ -146,8 +147,15 @@ export async function connectToChain(rpcUrl: string) {
     },
 
     getAmountString(amount: bigint) {
-      const quotient = computeQuotient(amount, tokenDivider, 10000);
+      const quotient = computeQuotient(amount, unit, 10000);
       return mainTokenSymbol !== undefined ? `${quotient} ${mainTokenSymbol}` : quotient;
+    },
+
+    getUnits() {
+      return {
+        unit,
+        milliUnit,
+      };
     },
 
     async instantiateWithCode(

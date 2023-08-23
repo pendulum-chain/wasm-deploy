@@ -5,23 +5,17 @@ import { Abi } from "@polkadot/api-contract";
 import {
   ArgumentType,
   ContractSourcecodeId,
-  DeployedContractId,
-  DeploymentsExtension,
-  ExecuctionEvent,
   NamedAccount,
-  NamedAccountId,
   NamedAccounts,
   TestContract,
   TestSuite,
   TestSuiteEnvironment,
 } from "../types";
 import { ChainApi, connectToChain } from "../api";
-import { rawAddressesAreEqual } from "../helpers/addresses";
-import { PromiseMutex } from "../helpers/promiseMutex";
 import { Project, initializeProject } from "../project";
 import { StyledText, createAnimatedTextContext } from "../helpers/terminal";
-import { ContractDeploymentState } from "../processScripts";
 import { compileContract } from "../actions/compileContract";
+import { toUnit } from "../helpers/rationals";
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -37,11 +31,23 @@ export async function runTestSuits(options: RunTestSuitesOptions) {
 
   const chainApi = await connectToChain(networkConfig.rpcUrl);
 
-  const { testNamedAccount } = testSuitConfig;
-  const namedAccount = await project.getFullNamedAccount(networkName, testNamedAccount, chainApi.getKeyring());
+  const testNamedAccount = await project.getFullNamedAccount(
+    networkName,
+    testSuitConfig.testNamedAccount,
+    chainApi.getKeyring()
+  );
+  const namedAccounts = await project.getAllNamedAccounts(networkName, chainApi.getKeyring());
 
   const successful = await createAnimatedTextContext(async (updateDynamicText, addStaticText) => {
-    await processTestScripts(project, chainApi, namedAccount, testSuites, updateDynamicText, addStaticText);
+    await processTestScripts(
+      project,
+      chainApi,
+      testNamedAccount,
+      namedAccounts,
+      testSuites,
+      updateDynamicText,
+      addStaticText
+    );
   });
 
   if (successful) {
@@ -54,11 +60,13 @@ async function processTestScripts(
   project: Project,
   chainApi: ChainApi,
   testNamedAccount: NamedAccount,
+  namedAccounts: NamedAccounts,
   testSuites: [string, TestSuite][],
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ): Promise<void> {
   const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
+  let deployerAccount: NamedAccount | undefined = undefined;
 
   for (const testSuitePair of testSuites) {
     const [testSuiteName, testSuite] = testSuitePair;
@@ -66,7 +74,7 @@ async function processTestScripts(
     const newContract = async (
       contractSourcecodeId: ContractSourcecodeId,
       constructorName: string,
-      args?: ArgumentType[]
+      ...args: ArgumentType[]
     ): Promise<TestContract> => {
       const updateContractStatus = () => undefined;
       const addEvent = () => undefined;
@@ -84,7 +92,12 @@ async function processTestScripts(
 
       const { result } = await chainApi.instantiateWithCode(
         compiledContractFileName,
-        { from: testNamedAccount, contract: contractSourcecodeId, constructorName, args: args ?? [] },
+        {
+          from: deployerAccount ?? testNamedAccount,
+          contract: contractSourcecodeId,
+          constructorName,
+          args: args ?? [],
+        },
         project,
         updateContractStatus,
         resolveContractEvent,
@@ -98,12 +111,12 @@ async function processTestScripts(
         throw new Error(`An error occurred deploying contract ${contractSourcecodeId}`);
       }
 
+      console.log("Deployed contract", contractSourcecodeId, result);
+
       const deployedAddress = result.value;
 
-      const deployedContract: TestContract = {};
-      console.log("Array", abi.metadata.spec.messages.toArray());
+      const deployedContract = { __internal: { deployedAddress } } as TestContract;
       Object.values(abi.metadata.spec.messages.toArray()).forEach((message) => {
-        console.log("message", message.label.toHuman());
         const label = message.label.toString();
         deployedContract[label] = async (...args: any[]) => {
           console.log("Call contract", contractSourcecodeId, label, args);
@@ -114,7 +127,7 @@ async function processTestScripts(
           const { result, transactionFee } = await chainApi.executeContractFunction(
             deployedAddress,
             metadata,
-            { from: testNamedAccount },
+            { from: deployerAccount ?? testNamedAccount },
             label,
             project,
             resolveContractEvent,
@@ -123,16 +136,39 @@ async function processTestScripts(
             ...args
           );
 
-          console.log(contractSourcecodeId, label, result);
+          console.log("Done", contractSourcecodeId, label, result);
         };
       });
 
       return deployedContract;
     };
 
-    const environmentForTestSuite: TestSuiteEnvironment = {
-      newContract,
+    const address = (contract: TestContract): string => {
+      return contract.__internal.deployedAddress;
     };
+
+    const units = chainApi.getUnits();
+
+    const startPrank = (namedAccount: NamedAccount): void => {
+      deployerAccount = namedAccount;
+    };
+    const stopPrank = (): void => {
+      deployerAccount = undefined;
+    };
+
+    const environmentForTestSuite: TestSuiteEnvironment = {
+      address,
+      unit: toUnit.bind(null, units.unit),
+      milliUnit: toUnit.bind(null, units.milliUnit),
+      startPrank,
+      stopPrank,
+      testNamedAccount,
+      namedAccounts,
+      constructors: {},
+    };
+    for (const contractId of project.getContracts()) {
+      environmentForTestSuite.constructors[`new${contractId}`] = newContract.bind(null, contractId, "new");
+    }
 
     addStaticText([[{ text: "Process test suite " }, { text: testSuiteName, color: "cyan" }]], false);
     const testSuiteInstance = await testSuite.default(environmentForTestSuite);
@@ -140,7 +176,6 @@ async function processTestScripts(
 
     for (const test of tests) {
       console.log(`Run test ${test}`);
-      const testSuiteInstance = await testSuite.default(environmentForTestSuite);
       if (testSuiteInstance.setUp !== undefined) {
         await testSuiteInstance.setUp();
       }

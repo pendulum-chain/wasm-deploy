@@ -5,7 +5,15 @@ import { readdir, readFile } from "node:fs/promises";
 
 import { Keyring } from "@polkadot/api";
 
-import { ContractSourcecodeId, DeployScript, NamedAccount, NamedAccountId, ScriptName, TestSuite } from "./types";
+import {
+  ContractSourcecodeId,
+  DeployScript,
+  NamedAccount,
+  NamedAccountId,
+  NamedAccounts,
+  ScriptName,
+  TestSuite,
+} from "./types";
 import {
   ContractConfiguration,
   ImportMap,
@@ -65,6 +73,47 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
 
     return networkConfig;
+  };
+
+  const getFullNamedAccount = async (
+    networkName: string,
+    namedAccountId: NamedAccountId,
+    keyring: Keyring
+  ): Promise<NamedAccount> => {
+    const networkConfig = getNetworkDefinition(networkName);
+    const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
+
+    if (namedAccountConfig === undefined)
+      throw new Error(
+        `Named account ${namedAccountId} is not defined in the network definition for network ${networkName}`
+      );
+
+    const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig!.address;
+    let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig!.suri;
+    if (suri === undefined) {
+      while (true) {
+        const rl = readline.createInterface({ input, output });
+        suri = (
+          await rl.question(`Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `)
+        ).trim();
+        rl.close();
+
+        const keyRingPair = keyring.addFromUri(suri);
+        const publicKey = keyring.addFromAddress(accountId);
+        if (!rawAddressesAreEqual(keyRingPair.addressRaw, publicKey.addressRaw)) {
+          console.log(`Invalid suri for address ${accountId}`);
+        } else {
+          break;
+        }
+      }
+    }
+
+    return {
+      accountId,
+      suri,
+      keypair: keyring.addFromUri(suri),
+      mutex: new PromiseMutex(),
+    };
   };
 
   return {
@@ -179,45 +228,17 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       };
     },
 
-    async getFullNamedAccount(
-      networkName: string,
-      namedAccountId: NamedAccountId,
-      keyring: Keyring
-    ): Promise<NamedAccount> {
+    getFullNamedAccount,
+
+    async getAllNamedAccounts(networkName: string, keyring: Keyring): Promise<NamedAccounts> {
+      const namedAccounts: NamedAccounts = {};
       const networkConfig = getNetworkDefinition(networkName);
-      const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
 
-      if (namedAccountConfig === undefined)
-        throw new Error(
-          `Named account ${namedAccountId} is not defined in the network definition for network ${networkName}`
-        );
-
-      const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig!.address;
-      let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig!.suri;
-      if (suri === undefined) {
-        while (true) {
-          const rl = readline.createInterface({ input, output });
-          suri = (
-            await rl.question(`Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `)
-          ).trim();
-          rl.close();
-
-          const keyRingPair = keyring.addFromUri(suri);
-          const publicKey = keyring.addFromAddress(accountId);
-          if (!rawAddressesAreEqual(keyRingPair.addressRaw, publicKey.addressRaw)) {
-            console.log(`Invalid suri for address ${accountId}`);
-          } else {
-            break;
-          }
-        }
+      for (const key of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
+        namedAccounts[key] = await getFullNamedAccount(networkName, key, keyring);
       }
 
-      return {
-        accountId,
-        suri,
-        keypair: keyring.addFromUri(suri),
-        mutex: new PromiseMutex(),
-      };
+      return namedAccounts;
     },
   };
 }

@@ -21,10 +21,7 @@ export async function deploy(options: DeployOptions) {
 
   const chainApi = await connectToChain(networkConfig.rpcUrl);
 
-  const namedAccounts: NamedAccounts = {};
-  for (const key of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
-    namedAccounts[key] = await project.getFullNamedAccount(networkName, key, chainApi.getKeyring());
-  }
+  const namedAccounts = await project.getAllNamedAccounts(networkName, chainApi.getKeyring());
 
   const getNamedAccounts = async function (): Promise<NamedAccounts> {
     return namedAccounts;

@@ -68,11 +68,24 @@ export interface DeployScript {
   default: DeployScriptFunction;
 }
 
-export type TestContract = Record<string, (...args: any[]) => Promise<any>>;
+export type TestContract = Record<string, (...args: any[]) => Promise<any>> & { __internal: TestContractInformation };
 
-export interface TestSuiteEnvironment {
-  newContract(contract: ContractSourcecodeId, constructorName: string, args?: ArgumentType[]): Promise<TestContract>;
+export interface TestContractInformation {
+  deployedAddress: string;
 }
+
+export type TestConstructor = (...args: any[]) => Promise<TestContract>;
+
+export type TestSuiteEnvironment = {
+  address: (contract: TestContract) => string;
+  unit: (number: number | string | bigint, precision?: number) => bigint;
+  milliUnit: (number: number | string | bigint, precision?: number) => bigint;
+  startPrank: (namedAccount: NamedAccount) => void;
+  stopPrank: () => void;
+  testNamedAccount: NamedAccount;
+  namedAccounts: NamedAccounts;
+  constructors: Record<string, TestConstructor>;
+};
 
 export type TestFunction = () => Promise<void>;
 

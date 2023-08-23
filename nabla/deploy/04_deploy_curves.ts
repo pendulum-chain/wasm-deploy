@@ -5,7 +5,7 @@ async function DeployCurves({ getNamedAccounts, deployments }: WasmDeployEnviron
 
   await deployments.deploy("amber-curve-0.0-0.01", {
     from: deployer,
-    contract: "AmberCurve",
+    contract: "NablaCurve",
     args: [0, 100_000_000_000n],
     log: true,
   });
