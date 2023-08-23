@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
 
-export async function runCommand(commandLine: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+export interface RunCommandOptions {
+  cwd?: string;
+}
+
+export async function runCommand(
+  commandLine: string[],
+  options: RunCommandOptions = {}
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
     try {
-      const process = spawn(commandLine[0], commandLine.slice(1));
+      const process = spawn(commandLine[0], commandLine.slice(1), options);
 
       let stdout = "";
       let stderr = "";

@@ -12,16 +12,17 @@ export async function pull({ projectFolder }: PullOptions) {
 
   await mkdir(project.getGitFolder(), { recursive: true });
 
-  const alreadyPulled = new Set<string>();
+  const alreadyProcessed = new Set<string>();
   for (const contractId of project.getContracts()) {
-    const gitClonePath = project.getGitCloneFolder(contractId);
+    const repository = project.getContractConfiguration(contractId).repository;
 
-    if (alreadyPulled.has(gitClonePath)) {
+    if (alreadyProcessed.has(repository)) {
       continue;
     }
-    alreadyPulled.add(gitClonePath);
+    alreadyProcessed.add(repository);
 
-    const { branch, git } = project.getContractSourceReference(contractId);
+    const gitClonePath = project.getGitCloneFolder(contractId);
+    const { branch, git, init } = project.getRepositoryConfig(contractId);
     console.log(`Clone git ${git} for branch ${branch}`);
 
     await rm(gitClonePath, { recursive: true, force: true });
@@ -29,6 +30,30 @@ export async function pull({ projectFolder }: PullOptions) {
 
     if (gitCloneResult.exitCode !== 0) {
       throw new Error(`Git error: ${gitCloneResult.stdout}, ${gitCloneResult.stderr}`);
+    }
+
+    switch (init) {
+      case "npm": {
+        console.log(`  Run npm install`);
+        const npmResult = await runCommand(["npm", "install"], { cwd: gitClonePath });
+
+        if (npmResult.exitCode !== 0) {
+          throw new Error(`Npm error: ${npmResult.stdout}, ${npmResult.stderr}`);
+        }
+
+        break;
+      }
+
+      case "yarn": {
+        console.log(`  Run yarn install`);
+        const yarnResult = await runCommand(["yarn", "install", "--ignore-engines"], { cwd: gitClonePath });
+
+        if (yarnResult.exitCode !== 0) {
+          throw new Error(`Yarn error: ${yarnResult.stdout}, ${yarnResult.stderr}`);
+        }
+
+        break;
+      }
     }
   }
 }

@@ -21,7 +21,7 @@ import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
 import { computeQuotient } from "./helpers/rationals";
 import { DecodedEvent } from "@polkadot/api-contract/types";
-import { ConfigFile, Project } from "./project";
+import { Project } from "./project";
 
 type ChainApiPromise = ReturnType<typeof connectToChain>;
 export type ChainApi = ChainApiPromise extends Promise<infer T> ? T : never;
