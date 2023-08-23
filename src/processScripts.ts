@@ -23,7 +23,7 @@ import { compileContract } from "./actions/compileContract";
 import { addressesAreEqual } from "./helpers/addresses";
 import { Abi } from "@polkadot/api-contract";
 import { DecodedEvent } from "@polkadot/api-contract/types";
-import { ConfigFile, Project } from "./project";
+import { Project } from "./project";
 
 export type ContractDeploymentState =
   | "pending"

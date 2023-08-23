@@ -1,49 +1,18 @@
 import { join } from "node:path";
-import { createHmac } from "node:crypto";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
-import { ContractSourcecodeId, DeployScript, NamedAccountId, ScriptName } from "./types";
+import { ContractSourcecodeId, DeployScript, ScriptName } from "./types";
+import {
+  ContractConfiguration,
+  ImportMap,
+  LimitsConfig,
+  NetworkConfig,
+  parseConfigFile,
+  RepositoryConfig,
+} from "./parseConfig";
+import { isFailure, isSuccess } from "fefe";
 
-export interface ContractSourceReference {
-  git: string;
-  path: string;
-  branch: string;
-}
-
-export interface ConfigFile {
-  contracts: Record<ContractSourcecodeId, ContractSourceReference>;
-  importpaths: string[];
-  networks: Record<string, NetworkConfig>;
-  buildFolder: string;
-  limits: LimitsConfig;
-}
-
-export interface NetworkConfig {
-  namedAccounts: Record<NamedAccountId, NamedAccountConfig>;
-  rpcUrl: string;
-}
-
-export type NamedAccountConfig =
-  | string
-  | {
-      address: string;
-      suri?: string;
-    };
-
-export interface LimitsConfig {
-  gas: {
-    refTime: number | string;
-    proofSize: number | string;
-  };
-  storageDeposit?: number | string | null;
-}
-
-function getGitCloneName({ branch, git }: ContractSourceReference) {
-  const hashMaterial = `${git} -> ${branch}`;
-  const hash = createHmac("sha256", hashMaterial).update("I love cupcakes").digest("hex");
-
-  return hash.slice(0, 20);
-}
+export type RepositoryInitialization = "npm" | "yarn";
 
 export type Project = ReturnType<typeof initializeProject> extends Promise<infer T> ? T : never;
 
@@ -53,14 +22,15 @@ export async function initializeProject(relativeProjectPath: string, configFileN
   const projectFolder = join(process.cwd(), relativeProjectPath);
   const configFilePath = join(projectFolder, configFileName);
 
-  const configFile: ConfigFile = await import(configFilePath);
-  const buildFolder = join(projectFolder, configFile.buildFolder);
+  const configFileContent = (await readFile(configFilePath)).toString("utf-8");
+  const configuration = parseConfigFile(configFileContent);
+
+  const buildFolder = join(projectFolder, configuration.buildFolder);
   const gitFolder = join(buildFolder, "git");
   const tempFolder = join(buildFolder, "temp");
-  const importpaths = (configFile.importpaths ?? []).map((importpath) => join(projectFolder, importpath));
 
-  const getContractSourceReference = (contractId: ContractSourcecodeId): ContractSourceReference => {
-    const contractSource = configFile.contracts[contractId];
+  const getContractConfiguration = (contractId: ContractSourcecodeId): ContractConfiguration => {
+    const contractSource = configuration.contracts[contractId];
     if (contractSource === undefined)
       throw new Error(`Contract ${contractId} does not exist in project ${relativeProjectPath}`);
 
@@ -68,8 +38,17 @@ export async function initializeProject(relativeProjectPath: string, configFileN
   };
 
   const getGitCloneFolder = (contractId: ContractSourcecodeId): string => {
-    const contractSource = getContractSourceReference(contractId);
-    return join(gitFolder, getGitCloneName(contractSource));
+    const contractSource = getContractConfiguration(contractId);
+    return join(gitFolder, contractSource.repository);
+  };
+
+  const getRepositoryConfig = (contractId: string): RepositoryConfig => {
+    const { repository } = getContractConfiguration(contractId);
+    const repositoryConfig = configuration.repositories[repository];
+    if (repositoryConfig === undefined)
+      throw new Error(`Repository ${repository} does not exist in project ${relativeProjectPath}`);
+
+    return repositoryConfig;
   };
 
   return {
@@ -86,31 +65,63 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     getContracts(): ContractSourcecodeId[] {
-      return Object.keys(configFile.contracts);
+      return Object.keys(configuration.contracts);
     },
 
     getGitCloneFolder,
 
-    getContractSourceReference,
+    getContractConfiguration,
 
-    getImportPaths(): string[] {
-      return importpaths;
-    },
+    getRepositoryConfig,
 
     getLimits(): LimitsConfig {
-      return configFile.limits;
+      return configuration.limits;
     },
 
     getNetworkDefinition(networkName: string): NetworkConfig {
-      const networkConfig = configFile.networks[networkName];
+      const networkConfig = configuration.networks[networkName];
       if (networkConfig === undefined)
         throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
 
       return networkConfig;
     },
 
+    getImportPaths(contractId: string): string[] {
+      let importpaths: string[] = [];
+
+      const contractConfig = getContractConfiguration(contractId);
+      if (contractConfig.importpaths !== undefined) {
+        importpaths = contractConfig.importpaths;
+      } else {
+        const repositoryConfig = getRepositoryConfig(contractId);
+        if (repositoryConfig.importpaths !== undefined) {
+          importpaths = repositoryConfig.importpaths;
+        }
+      }
+
+      const gitCloneFolder = getGitCloneFolder(contractId);
+      return importpaths.map((importpath) => join(gitCloneFolder, importpath));
+    },
+
+    getImportMaps(contractId: string): ImportMap[] {
+      let importmaps: ImportMap[] = [];
+
+      const contractConfig = getContractConfiguration(contractId);
+      if (contractConfig.importmaps !== undefined) {
+        importmaps = contractConfig.importmaps;
+      } else {
+        const repositoryConfig = getRepositoryConfig(contractId);
+        if (repositoryConfig.importmaps !== undefined) {
+          importmaps = repositoryConfig.importmaps;
+        }
+      }
+
+      const gitCloneFolder = getGitCloneFolder(contractId);
+      return importmaps.map((importmap) => ({ ...importmap, to: join(gitCloneFolder, importmap.to) }));
+    },
+
     getContractSourcePath(contractId: ContractSourcecodeId): string {
-      const contractSource = getContractSourceReference(contractId);
+      const contractSource = getContractConfiguration(contractId);
       return join(getGitCloneFolder(contractId), contractSource.path);
     },
 

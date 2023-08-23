@@ -5,7 +5,7 @@ import blake2b from "blake2b";
 import { runCommand } from "../helpers/childProcess";
 import { DeploymentArguments } from "../types";
 import { ContractDeploymentState } from "../processScripts";
-import { ConfigFile, Project } from "../project";
+import { Project } from "../project";
 
 export async function compileContract(
   args: DeploymentArguments,
@@ -33,19 +33,21 @@ async function actuallyCompileContract(
   project: Project,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
-  const { contract } = args;
+  const { contract: contractId } = args;
 
-  const contractSourceName = project.getContractSourcePath(contract);
+  const contractSourceName = project.getContractSourcePath(contractId);
   const builtFileName = join(project.getTempFolder(), basename(contractSourceName));
 
   const builtWasmFileName = builtFileName.replace(/.sol$/, ".wasm");
   const builtMetadataFileName = builtFileName.replace(/.sol$/, ".contract");
 
-  const wasmFileName = join(project.getBuildFolder(), `${contract}.wasm`);
-  const metadataFileName = join(project.getBuildFolder(), `${contract}.contract`);
-  const optimizedWasmFileName = join(project.getBuildFolder(), `${contract}.optimized.wasm`);
+  const wasmFileName = join(project.getBuildFolder(), `${contractId}.wasm`);
+  const metadataFileName = join(project.getBuildFolder(), `${contractId}.contract`);
+  const optimizedWasmFileName = join(project.getBuildFolder(), `${contractId}.optimized.wasm`);
 
-  const importpaths = project.getImportPaths();
+  const importpaths = project.getImportPaths(contractId);
+  const importmaps = project.getImportMaps(contractId);
+
   updateContractStatus("compiling");
   const solangResult = await runCommand([
     "solang",
@@ -58,6 +60,7 @@ async function actuallyCompileContract(
     "--output",
     project.getTempFolder(),
     ...importpaths.map((path) => ["--importpath", path]).flat(),
+    ...importmaps.map(({ from, to }) => ["--importmap", `${from}=${to}`]).flat(),
     contractSourceName,
   ]);
   updateContractStatus("compiled");
