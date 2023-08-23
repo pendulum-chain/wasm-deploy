@@ -5,16 +5,6 @@
       "path": "contracts/src/core/Router.sol",
       "branch": "main"
     },
-    "MockERC20": {
-      "git": "https://github.com/0xamberhq/contracts.git",
-      "path": "contracts/src/mock/MockERC20.sol",
-      "branch": "main"
-    },
-    "ChainlinkAdapter": {
-      "git": "https://github.com/0xamberhq/contracts.git",
-      "path": "contracts/src/compat/ChainlinkAdapter.sol",
-      "branch": "main"
-    },
     "AmberCurve": {
       "git": "https://github.com/0xamberhq/curve",
       "path": "src/NablaCurve.sol",
@@ -29,6 +19,16 @@
       "git": "https://github.com/0xamberhq/contracts.git",
       "path": "contracts/src/core/SwapPool.sol",
       "branch": "main"
+    },
+    "ERC20Wrapper": {
+      "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
+      "path": "erc20-wrapper/ERC20Wrapper.sol",
+      "branch": "master"
+    },
+    "PriceOracleWrapper": {
+      "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
+      "path": "price-oracle-wrapper/PriceOracleWrapper.sol",
+      "branch": "master"
     }
   },
   "importpaths": ["../../clones/nabla-contracts/contracts/@chain/pendulum", "../node_modules/"],
