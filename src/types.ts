@@ -37,7 +37,7 @@ export interface DeploymentArguments {
   from: NamedAccount;
   contract: ContractSourcecodeId;
   args: ArgumentType[];
-  log: boolean;
+  log?: boolean;
   constructorName?: string;
 }
 
@@ -66,6 +66,22 @@ export type DeployScriptFunction = {
 
 export interface DeployScript {
   default: DeployScriptFunction;
+}
+
+export type TestContract = Record<string, (...args: any[]) => Promise<any>>;
+
+export interface TestSuiteEnvironment {
+  newContract(contract: ContractSourcecodeId, constructorName: string, args?: ArgumentType[]): Promise<TestContract>;
+}
+
+export type TestFunction = () => Promise<void>;
+
+export type TestSuiteFunction = {
+  (environment: TestSuiteEnvironment): Promise<Record<string, TestFunction>>;
+};
+
+export interface TestSuite {
+  default: TestSuiteFunction;
 }
 
 export interface ExecuctionEvent {

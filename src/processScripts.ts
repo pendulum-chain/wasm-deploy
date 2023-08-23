@@ -1,6 +1,9 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
 import { readFile } from "node:fs/promises";
 
+import { Abi } from "@polkadot/api-contract";
+import { DecodedEvent } from "@polkadot/api-contract/types";
+
 import {
   Address,
   ContractSourcecodeId,
@@ -16,13 +19,10 @@ import {
   TxOptions,
   WasmDeployEnvironment,
 } from "./types";
-
 import { ChainApi } from "./api";
 import { StyledText } from "./helpers/terminal";
 import { compileContract } from "./actions/compileContract";
 import { addressesAreEqual } from "./helpers/addresses";
-import { Abi } from "@polkadot/api-contract";
-import { DecodedEvent } from "@polkadot/api-contract/types";
 import { Project } from "./project";
 
 export type ContractDeploymentState =
@@ -149,7 +149,7 @@ export async function processScripts(
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ) {
   let executionStatuses: ExecutionStatus[] = [];
-  const compiledContracts: Record<DeployedContractId, Promise<string>> = {};
+  const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
 
   const resolveContractEvent = (
@@ -219,7 +219,12 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const compiledContractFileName = await compileContract(args, project, compiledContracts, updateContractStatus);
+    const compiledContractFileName = await compileContract(
+      args.contract,
+      project,
+      compiledContracts,
+      updateContractStatus
+    );
     const compiledContractFile = await readFile(compiledContractFileName);
     const metadata = JSON.parse(compiledContractFile.toString("utf8"));
     const abi = new Abi(metadata, chainApi.api().registry.getChainProperties());
@@ -288,7 +293,8 @@ export async function processScripts(
     };
 
     const { result, transactionFee } = await chainApi.executeContractFunction(
-      contract,
+      contract.address,
+      contract.metadata,
       tx,
       functionName,
       project,

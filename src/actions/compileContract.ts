@@ -3,23 +3,23 @@ import { readFile, writeFile, rename } from "node:fs/promises";
 import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
-import { DeploymentArguments } from "../types";
+import { ContractSourcecodeId, DeploymentArguments } from "../types";
 import { ContractDeploymentState } from "../processScripts";
 import { Project } from "../project";
 
 export async function compileContract(
-  args: DeploymentArguments,
+  contractId: ContractSourcecodeId,
   project: Project,
-  compiledContracts: Record<string, Promise<string>>,
+  compiledContracts: Record<ContractSourcecodeId, Promise<string>>,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
-  const { contract } = args;
-  const uploadedCodePromise = (await compiledContracts[contract])?.trim();
+  const uploadedCodePromise =
+    compiledContracts[contractId] !== undefined ? (await compiledContracts[contractId]).trim() : undefined;
 
   if (uploadedCodePromise === undefined) {
     let resolve: (value: string) => void;
-    compiledContracts[contract] = new Promise<string>((_resolve) => (resolve = _resolve));
-    const codeHash = await actuallyCompileContract(args, project, updateContractStatus);
+    compiledContracts[contractId] = new Promise<string>((_resolve) => (resolve = _resolve));
+    const codeHash = await actuallyCompileContract(contractId, project, updateContractStatus);
     resolve!(codeHash);
 
     return codeHash;
@@ -29,12 +29,10 @@ export async function compileContract(
 }
 
 async function actuallyCompileContract(
-  args: DeploymentArguments,
+  contractId: ContractSourcecodeId,
   project: Project,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
-  const { contract: contractId } = args;
-
   const contractSourceName = project.getContractSourcePath(contractId);
   const builtFileName = join(project.getTempFolder(), basename(contractSourceName));
 

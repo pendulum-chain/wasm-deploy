@@ -58,6 +58,9 @@
       "rpcUrl": "ws://127.0.0.1:9944"
     }
   },
+  "tests": {
+    "testNamedAccount": "deployer"
+  },
   "buildFolder": "../target",
   "limits": {
     "gas": {

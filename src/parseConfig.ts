@@ -32,7 +32,7 @@ const validateContractSourceReference = object(
   { allowExcessProperties: false }
 );
 
-export type NamedAccount = ValidatorReturnType<typeof validateNamedAccount>;
+export type NamedAccountConfig = ValidatorReturnType<typeof validateNamedAccount>;
 const validateNamedAccount = union(
   string(),
   object(
@@ -83,12 +83,21 @@ const validateRepositoryConfig = object(
 export type RepositoryConfigMap = ValidatorReturnType<typeof validateRepositoryConfigMap>;
 const validateRepositoryConfigMap = objectMap(validateRepositoryConfig);
 
+export type TestSuiteConfig = ValidatorReturnType<typeof validateTestSuiteConfig>;
+const validateTestSuiteConfig = object(
+  {
+    testNamedAccount: string(),
+  },
+  { allowExcessProperties: false }
+);
+
 export type Configuration = ValidatorReturnType<typeof validateConfigFile>;
 const validateConfigFile = object(
   {
     contracts: objectMap(validateContractSourceReference),
     repositories: validateRepositoryConfigMap,
     networks: objectMap(validateNetworkConfig),
+    tests: optional(validateTestSuiteConfig),
     buildFolder: string(),
     limits: validateLimitsConfig,
   },

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { deploy } from "./commands/deploy";
 import { pull } from "./commands/pull";
+import { runTestSuits } from "./commands/test";
 
 export function parseCommandLine() {
   const program = new Command();
@@ -25,6 +26,15 @@ export function parseCommandLine() {
     .requiredOption("-n, --network <name>", "the network name of the project")
     .action(async (str, options) => {
       deploy({ projectFolder: str, network: options.network });
+    });
+
+  program
+    .command("test")
+    .description("Run the test suite defined in a project")
+    .argument("<folder>", "project folder")
+    .requiredOption("-n, --network <name>", "the network name of the project")
+    .action(async (str, options) => {
+      runTestSuits({ projectFolder: str, network: options.network });
     });
 
   program.parse();

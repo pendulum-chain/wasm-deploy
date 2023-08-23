@@ -1,4 +1,10 @@
+import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { parseCommandLine } from "./commandLine";
 export { WasmDeployEnvironment } from "./types";
 
-parseCommandLine();
+async function main() {
+  await cryptoWaitReady();
+  parseCommandLine();
+}
+
+main();

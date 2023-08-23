@@ -1,7 +1,11 @@
+import * as readline from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
 
-import { ContractSourcecodeId, DeployScript, ScriptName } from "./types";
+import { Keyring } from "@polkadot/api";
+
+import { ContractSourcecodeId, DeployScript, NamedAccount, NamedAccountId, ScriptName, TestSuite } from "./types";
 import {
   ContractConfiguration,
   ImportMap,
@@ -9,8 +13,10 @@ import {
   NetworkConfig,
   parseConfigFile,
   RepositoryConfig,
+  TestSuiteConfig,
 } from "./parseConfig";
-import { isFailure, isSuccess } from "fefe";
+import { rawAddressesAreEqual } from "./helpers/addresses";
+import { PromiseMutex } from "./helpers/promiseMutex";
 
 export type RepositoryInitialization = "npm" | "yarn";
 
@@ -21,6 +27,8 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
   const projectFolder = join(process.cwd(), relativeProjectPath);
   const configFilePath = join(projectFolder, configFileName);
+  const deployScriptsPath = join(projectFolder, "deploy");
+  const testsPath = join(projectFolder, "test");
 
   const configFileContent = (await readFile(configFilePath)).toString("utf-8");
   const configuration = parseConfigFile(configFileContent);
@@ -51,6 +59,14 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     return repositoryConfig;
   };
 
+  const getNetworkDefinition = (networkName: string): NetworkConfig => {
+    const networkConfig = configuration.networks[networkName];
+    if (networkConfig === undefined)
+      throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
+
+    return networkConfig;
+  };
+
   return {
     getBuildFolder() {
       return buildFolder;
@@ -78,13 +94,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       return configuration.limits;
     },
 
-    getNetworkDefinition(networkName: string): NetworkConfig {
-      const networkConfig = configuration.networks[networkName];
-      if (networkConfig === undefined)
-        throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
-
-      return networkConfig;
-    },
+    getNetworkDefinition,
 
     getImportPaths(contractId: string): string[] {
       let importpaths: string[] = [];
@@ -126,7 +136,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     async readDeploymentScripts(): Promise<[ScriptName, DeployScript][]> {
-      const entries = await readdir(projectFolder, { recursive: true, withFileTypes: true });
+      const entries = await readdir(deployScriptsPath, { recursive: true, withFileTypes: true });
       const fileNames = entries
         .filter((entry) => entry.isFile())
         .map((entry) => entry.name as ScriptName)
@@ -134,7 +144,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
       const scripts: [ScriptName, DeployScript][] = await Promise.all(
         fileNames.map(async (file) => {
-          const path = join(projectFolder, file);
+          const path = join(deployScriptsPath, file);
           const imports: DeployScript = await import(path);
           return [file, imports];
         })
@@ -143,6 +153,71 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       scripts.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
 
       return scripts;
+    },
+
+    async readTests(): Promise<{ testSuitConfig: TestSuiteConfig; testSuites: [ScriptName, TestSuite][] }> {
+      const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
+      const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+
+      const testSuites: [string, TestSuite][] = await Promise.all(
+        fileNames.map(async (file) => {
+          const path = join(testsPath, file);
+          const imports: TestSuite = await import(path);
+          return [file, imports];
+        })
+      );
+
+      testSuites.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
+
+      const testSuitConfig = configuration.tests;
+      if (testSuitConfig === undefined)
+        throw new Error(`No "tests" configuration entry in project ${relativeProjectPath}`);
+
+      return {
+        testSuitConfig,
+        testSuites,
+      };
+    },
+
+    async getFullNamedAccount(
+      networkName: string,
+      namedAccountId: NamedAccountId,
+      keyring: Keyring
+    ): Promise<NamedAccount> {
+      const networkConfig = getNetworkDefinition(networkName);
+      const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
+
+      if (namedAccountConfig === undefined)
+        throw new Error(
+          `Named account ${namedAccountId} is not defined in the network definition for network ${networkName}`
+        );
+
+      const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig!.address;
+      let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig!.suri;
+      if (suri === undefined) {
+        while (true) {
+          const rl = readline.createInterface({ input, output });
+          suri = (
+            await rl.question(`Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `)
+          ).trim();
+          rl.close();
+
+          const keyRingPair = keyring.addFromUri(suri);
+          const publicKey = keyring.addFromAddress(accountId);
+          if (!rawAddressesAreEqual(keyRingPair.addressRaw, publicKey.addressRaw)) {
+            console.log(`Invalid suri for address ${accountId}`);
+          } else {
+            break;
+          }
+        }
+      }
+
+      return {
+        accountId,
+        suri,
+        keypair: keyring.addFromUri(suri),
+        mutex: new PromiseMutex(),
+      };
     },
   };
 }

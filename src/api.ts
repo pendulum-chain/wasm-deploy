@@ -163,7 +163,7 @@ export async function connectToChain(rpcUrl: string) {
       addEvent: (event: ExecuctionEvent) => void,
       abiObject: Abi,
       contractId: string
-    ) {
+    ): Promise<SubmitTransactionResult<Address>> {
       const deployer = deploymentArguments.from;
       if (deployer === undefined) {
         throw new Error(`Unknown deployer account`);
@@ -237,7 +237,8 @@ export async function connectToChain(rpcUrl: string) {
     },
 
     async executeContractFunction(
-      deployment: Deployment,
+      address: Address,
+      metadata: any,
       tx: TxOptions,
       functionName: string,
       project: Project,
@@ -246,7 +247,6 @@ export async function connectToChain(rpcUrl: string) {
       addEvent: (event: ExecuctionEvent) => void,
       ...rest: any[]
     ) {
-      const { compiledContractFileName, address, metadata } = deployment;
       const deployer = tx.from;
       if (deployer === undefined) {
         throw new Error(`Unknown deployer account`);
