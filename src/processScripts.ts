@@ -1,29 +1,20 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
 import { readFile } from "node:fs/promises";
 
-import { Abi } from "@polkadot/api-contract";
-import { DecodedEvent } from "@polkadot/api-contract/types";
-
+import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName } from "./types";
+import { ChainApi, DecodedContractEvent } from "./api/api";
+import { StyledText } from "./helpers/terminal";
+import { compileContract } from "./actions/compileContract";
+import { Project } from "./project";
 import {
-  Address,
-  ContractSourcecodeId,
   DeployScript,
-  DeployedContractId,
   Deployment,
   DeploymentArguments,
   DeploymentsExtension,
-  ExecuctionEvent,
-  NamedAccounts,
   Network,
-  ScriptName,
   TxOptions,
   WasmDeployEnvironment,
-} from "./types";
-import { ChainApi } from "./api";
-import { StyledText } from "./helpers/terminal";
-import { compileContract } from "./actions/compileContract";
-import { addressesAreEqual } from "./helpers/addresses";
-import { Project } from "./project";
+} from "./commands/deploy";
 
 export type ContractDeploymentState =
   | "pending"
@@ -42,7 +33,7 @@ interface ContractDeploymentStatus {
   address?: Address;
   failure?: string;
   transactionFee?: bigint;
-  events: ExecuctionEvent[];
+  events: DecodedContractEvent<DeployedContractId>[];
 }
 
 export type MethodExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
@@ -51,7 +42,7 @@ interface MethodExecutionStatus {
   deployedContractId: DeployedContractId;
   functionName: string;
   state: MethodExecutionState;
-  events: ExecuctionEvent[];
+  events: DecodedContractEvent<DeployedContractId>[];
   gasRequired?: WeightV2;
   transactionFee?: bigint;
   transactionResult?: string;
@@ -64,15 +55,15 @@ type ExecutionStatus =
   | { type: "contractDeployment"; status: ContractDeploymentStatus }
   | { type: "methodExecution"; status: MethodExecutionStatus };
 
-function renderEvents(events: ExecuctionEvent[]): StyledText[] {
+function renderEvents(events: DecodedContractEvent<DeployedContractId>[]): StyledText[] {
   const result: StyledText[] = [];
 
-  events.forEach(({ args, deployedContractId, identifier }) => {
+  events.forEach(({ args, deployedContractId, eventIdentifier }) => {
     result.push([
       { text: "    🎉 Event " },
       { text: deployedContractId, color: "blue" },
       { text: "." },
-      { text: identifier, color: "green" },
+      { text: eventIdentifier, color: "green" },
     ]);
 
     args.forEach(({ name, value }) => {
@@ -90,7 +81,7 @@ function renderEvents(events: ExecuctionEvent[]): StyledText[] {
 
 function renderContractDeploymentStatus(
   contractDeploymentStatus: ContractDeploymentStatus,
-  chainApi: ChainApi
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>
 ): StyledText[] {
   const { contractFileId, deployedContractId, state, address, transactionFee, failure } = contractDeploymentStatus;
   const firstLine: StyledText = [
@@ -109,7 +100,10 @@ function renderContractDeploymentStatus(
   return [firstLine, ...renderEvents(contractDeploymentStatus.events)];
 }
 
-function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText[] {
+function renderMethodExecutionStatus(
+  methodExecutionStatus: MethodExecutionStatus,
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>
+): StyledText[] {
   const { deployedContractId, functionName, state, transactionResult, transactionFee, failure, gasRequired } =
     methodExecutionStatus;
 
@@ -144,30 +138,13 @@ export async function processScripts(
   getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
   project: Project,
-  chainApi: ChainApi,
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>,
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ) {
   let executionStatuses: ExecutionStatus[] = [];
   const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
-
-  const resolveContractEvent = (
-    contractAddress: string,
-    data: Buffer,
-    extra?: { id: string; address: string; abi: Abi }
-  ): [DeployedContractId, DecodedEvent] | undefined => {
-    if (extra !== undefined && addressesAreEqual(extra.address, contractAddress, chainApi)) {
-      return [extra.id, extra.abi.decodeEvent(data)];
-    }
-
-    for (const entry of Object.entries(deployedContracts)) {
-      const [deployedContractId, deployment] = entry;
-      if (addressesAreEqual(deployment.address, contractAddress, chainApi)) {
-        return [deployedContractId, deployment.abi.decodeEvent(data)];
-      }
-    }
-  };
 
   const updateDisplayedStatus = (asStaticText: boolean = false) => {
     const styledTexts = executionStatuses
@@ -214,11 +191,6 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const addEvent = (event: ExecuctionEvent) => {
-      contractDeploymentStatus.events.push(event);
-      updateDisplayedStatus();
-    };
-
     const compiledContractFileName = await compileContract(
       args.contract,
       project,
@@ -226,35 +198,37 @@ export async function processScripts(
       updateContractStatus
     );
     const compiledContractFile = await readFile(compiledContractFileName);
-    const metadata = JSON.parse(compiledContractFile.toString("utf8"));
-    const abi = new Abi(metadata, chainApi.api().registry.getChainProperties());
+    chainApi.registerMetadata(args.contract, compiledContractFile.toString("utf8"));
 
-    const { result, transactionFee } = await chainApi.instantiateWithCode(
-      compiledContractFileName,
-      args,
+    const { status, transactionFee, contractEvents, deploymentAddress } = await chainApi.deployContract({
+      constructorArguments: args.args,
+      contractMetadataId: args.contract,
+      deployedContractId,
       project,
-      updateContractStatus,
-      resolveContractEvent,
-      addEvent,
-      abi,
-      deployedContractId
-    );
+      submitter: args.from,
+      constructorName: args.constructorName,
+      onStartingDeployment: () => updateContractStatus("deploying"),
+    });
+
+    contractEvents.forEach((event) => {
+      if (event.decoded !== undefined) {
+        contractDeploymentStatus.events.push(event.decoded);
+      }
+    });
 
     contractDeploymentStatus.transactionFee = transactionFee;
-    if (result.type === "error") {
-      contractDeploymentStatus.failure = result.error;
+    if (status.type === "error") {
+      contractDeploymentStatus.failure = `${status.error}`;
       updateContractStatus("failure");
 
-      throw new Error(`An error occurred deploying contract ${deployedContractId}`);
+      throw new Error(`An error occurred deploying contract (${status.type}): ${deployedContractId}`);
     }
 
     const deployment: Deployment = {
-      address: result.value,
+      address: deploymentAddress,
       compiledContractFileName,
-      metadata,
-      abi,
     };
-    contractDeploymentStatus.address = result.value;
+    contractDeploymentStatus.address = deploymentAddress;
     updateContractStatus("deployed");
 
     deployedContracts[deployedContractId] = deployment;
@@ -287,24 +261,25 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const addEvent = (event: ExecuctionEvent) => {
-      methodExecutionStatus.events.push(event);
-      updateDisplayedStatus();
-    };
-
-    const { result, transactionFee } = await chainApi.executeContractFunction(
-      contract.address,
-      contract.metadata,
-      tx,
-      functionName,
+    const { result, execution } = await chainApi.messageCall({
+      deploymentAddress: contract.address,
+      messageArguments: rest,
+      messageName: functionName,
       project,
-      resolveContractEvent,
-      updateExecutionStatus,
-      addEvent,
-      ...rest
-    );
+      submitter: tx.from,
+      onPreflightExecuted: (gasRequired) => updateExecutionStatus("gas estimated", gasRequired),
+      onReadyToSubmit: () => updateExecutionStatus("submitting"),
+    });
 
-    methodExecutionStatus.transactionFee = transactionFee;
+    if (execution.type === "extrinsic") {
+      methodExecutionStatus.transactionFee = execution.transactionFee;
+      execution.contractEvents.forEach((event) => {
+        if (event.decoded !== undefined) {
+          methodExecutionStatus.events.push(event.decoded);
+        }
+      });
+    }
+
     if (result.type === "error") {
       methodExecutionStatus.failure = result.error;
       updateExecutionStatus("failure", undefined);

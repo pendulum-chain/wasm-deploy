@@ -5,15 +5,7 @@ import { readdir, readFile } from "node:fs/promises";
 
 import { Keyring } from "@polkadot/api";
 
-import {
-  ContractSourcecodeId,
-  DeployScript,
-  NamedAccount,
-  NamedAccountId,
-  NamedAccounts,
-  ScriptName,
-  TestSuite,
-} from "./types";
+import { ContractSourcecodeId, NamedAccountId, NamedAccounts, ScriptName } from "./types";
 import {
   ContractConfiguration,
   ImportMap,
@@ -25,6 +17,9 @@ import {
 } from "./parseConfig";
 import { rawAddressesAreEqual } from "./helpers/addresses";
 import { PromiseMutex } from "./helpers/promiseMutex";
+import { Submitter } from "./api/api";
+import { TestSuite } from "./commands/test";
+import { DeployScript } from "./commands/deploy";
 
 export type RepositoryInitialization = "npm" | "yarn";
 
@@ -79,7 +74,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     networkName: string,
     namedAccountId: NamedAccountId,
     keyring: Keyring
-  ): Promise<NamedAccount> => {
+  ): Promise<Submitter> => {
     const networkConfig = getNetworkDefinition(networkName);
     const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
 
@@ -110,7 +105,6 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
     return {
       accountId,
-      suri,
       keypair: keyring.addFromUri(suri),
       mutex: new PromiseMutex(),
     };

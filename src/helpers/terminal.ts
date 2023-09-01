@@ -159,6 +159,7 @@ export async function createAnimatedTextContext(
     updateDynamicText(lines, true);
     console.error("\nAn error occurred");
     console.error((error as Error).message);
+    console.error(error as Error);
     return false;
   } finally {
     if (process.stdout.isTTY) {

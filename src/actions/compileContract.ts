@@ -3,7 +3,7 @@ import { readFile, writeFile, rename } from "node:fs/promises";
 import blake2b from "blake2b";
 
 import { runCommand } from "../helpers/childProcess";
-import { ContractSourcecodeId, DeploymentArguments } from "../types";
+import { ContractSourcecodeId } from "../types";
 import { ContractDeploymentState } from "../processScripts";
 import { Project } from "../project";
 
@@ -48,10 +48,11 @@ async function actuallyCompileContract(
 
   updateContractStatus("compiling");
   const solangResult = await runCommand([
-    "solang",
+    "../clones/solang/target/release/solang",
     "compile",
+    "--no-strength-reduce", // temporary fix for https://github.com/hyperledger/solang/issues/1507
     "--target",
-    "substrate",
+    "polkadot",
     "-O",
     "aggressive",
     "--release",
