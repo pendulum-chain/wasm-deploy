@@ -86,7 +86,8 @@ const validateRepositoryConfigMap = objectMap(validateRepositoryConfig);
 export type TestSuiteConfig = ValidatorReturnType<typeof validateTestSuiteConfig>;
 const validateTestSuiteConfig = object(
   {
-    testNamedAccount: string(),
+    tester: string(),
+    root: string(),
   },
   { allowExcessProperties: false }
 );

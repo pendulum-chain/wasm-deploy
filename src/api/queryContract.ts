@@ -106,14 +106,11 @@ export async function queryContract({
       }
       resolved = true;
 
-      console.log("message", event.result.toHuman());
-      console.log("flags", event.result.asOk?.flags.toHuman());
       const { result, gasRequired } = event;
 
       if (result.isOk) {
         const data = result.asOk.data.toU8a(true);
         if (!result.asOk.flags.isRevert) {
-          console.log("Query seems to be successful", data);
           const value = message.returnType
             ? abi.registry.createTypeUnsafe(message.returnType.lookupName || message.returnType.type, [data], {
                 isPedantic: true,

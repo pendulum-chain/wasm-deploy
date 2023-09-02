@@ -5,7 +5,7 @@ import { readdir, readFile } from "node:fs/promises";
 
 import { Keyring } from "@polkadot/api";
 
-import { ContractSourcecodeId, NamedAccountId, NamedAccounts, ScriptName } from "./types";
+import { ContractSourcecodeId, NamedAccountId, ScriptName } from "./types";
 import {
   ContractConfiguration,
   ImportMap,
@@ -17,9 +17,9 @@ import {
 } from "./parseConfig";
 import { rawAddressesAreEqual } from "./helpers/addresses";
 import { PromiseMutex } from "./helpers/promiseMutex";
-import { Submitter } from "./api/api";
 import { TestSuite } from "./commands/test";
 import { DeployScript } from "./commands/deploy";
+import { SigningSubmitter } from "./api/submitTransaction";
 
 export type RepositoryInitialization = "npm" | "yarn";
 
@@ -70,11 +70,11 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     return networkConfig;
   };
 
-  const getFullNamedAccount = async (
+  const getSigningSubmitter = async (
     networkName: string,
     namedAccountId: NamedAccountId,
     keyring: Keyring
-  ): Promise<Submitter> => {
+  ): Promise<SigningSubmitter> => {
     const networkConfig = getNetworkDefinition(networkName);
     const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
 
@@ -104,7 +104,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     }
 
     return {
-      accountId,
+      type: "signing",
       keypair: keyring.addFromUri(suri),
       mutex: new PromiseMutex(),
     };
@@ -222,17 +222,20 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       };
     },
 
-    getFullNamedAccount,
+    getSigningSubmitter,
 
-    async getAllNamedAccounts(networkName: string, keyring: Keyring): Promise<NamedAccounts> {
-      const namedAccounts: NamedAccounts = {};
+    async getAllSigningSubmitters(
+      networkName: string,
+      keyring: Keyring
+    ): Promise<Record<NamedAccountId, SigningSubmitter>> {
+      const signingSubmitters: Record<string, SigningSubmitter> = {};
       const networkConfig = getNetworkDefinition(networkName);
 
-      for (const key of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
-        namedAccounts[key] = await getFullNamedAccount(networkName, key, keyring);
+      for (const namedAccountId of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
+        signingSubmitters[namedAccountId] = await getSigningSubmitter(networkName, namedAccountId, keyring);
       }
 
-      return namedAccounts;
+      return signingSubmitters;
     },
   };
 }

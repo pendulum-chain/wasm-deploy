@@ -20,6 +20,8 @@ const MAX_UINT256 = 2n ** 256n - 1n;
   _pool.deposit(0.0001 ether);
 }*/
 
+const BOB = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
+
 export default async function (environment: TestSuiteEnvironment) {
   let {
     address,
@@ -30,8 +32,8 @@ export default async function (environment: TestSuiteEnvironment) {
     startPrank,
     expectRevert,
     expectEmit,
-    testNamedAccount,
-    namedAccounts,
+    getContractByAddress,
+    tester,
     constructors: {
       newRouter,
       newTestableBackstopPool,
@@ -67,7 +69,7 @@ export default async function (environment: TestSuiteEnvironment) {
   const nablaCurve = await newNablaCurve(0, 10n ** 16n);
   const MINT_AMOUNT = unit(100);
 
-  const setUp = async () => {
+  async function setUp() {
     router = await newRouter();
     backstop = await newTestableBackstopPool(
       address(router),
@@ -112,17 +114,17 @@ export default async function (environment: TestSuiteEnvironment) {
     await backstop.addSwapPool(address(swapPool1), 0);
     await backstop.addSwapPool(address(swapPool2), 0);
 
-    await asset1.mint(testNamedAccount.accountId, MINT_AMOUNT);
-    await asset2.mint(testNamedAccount.accountId, MINT_AMOUNT);
-    await usd.mint(testNamedAccount.accountId, MINT_AMOUNT);
+    await asset1.mint(tester, MINT_AMOUNT);
+    await asset2.mint(tester, MINT_AMOUNT);
+    await usd.mint(tester, MINT_AMOUNT);
 
-    startPrank(namedAccounts.bob);
+    startPrank(BOB);
     await asset1.approve(address(swapPool1), MAX_UINT256);
     await asset2.approve(address(swapPool2), MAX_UINT256);
     await usd.approve(address(backstop), MAX_UINT256);
-    await asset1.mint(namedAccounts.bob.accountId, MINT_AMOUNT);
-    await asset2.mint(namedAccounts.bob.accountId, MINT_AMOUNT);
-    await usd.mint(namedAccounts.bob.accountId, MINT_AMOUNT);
+    await asset1.mint(BOB, MINT_AMOUNT);
+    await asset2.mint(BOB, MINT_AMOUNT);
+    await usd.mint(BOB, MINT_AMOUNT);
     await swapPool1.deposit(MINT_AMOUNT);
     await swapPool2.deposit(MINT_AMOUNT);
     await backstop.deposit(MINT_AMOUNT);
@@ -132,18 +134,18 @@ export default async function (environment: TestSuiteEnvironment) {
       unit(30),
       unit(14),
       [address(asset1), address(asset2)],
-      testNamedAccount.accountId,
+      tester,
       Math.floor(Date.now() / 1000) + 2
     );
-  };
+  }
 
-  const testPreventsDuplicateSwapPool = async () => {
+  async function testPreventsDuplicateSwapPool() {
     expectRevert("addSwapPool():DUPLICATE_SWAP_POOL");
     await backstop.addSwapPool(address(swapPool1), 0);
-  };
+  }
 
-  const testCanAddSwapPoolOfSameToken = async () => {
-    const _pool = await newSwapPool(
+  async function testCanAddSwapPoolOfSameToken() {
+    const pool = await newSwapPool(
       address(usd),
       address(nablaCurve),
       address(router),
@@ -154,17 +156,17 @@ export default async function (environment: TestSuiteEnvironment) {
     );
 
     // Need to be able to do that, will need to secure by other means
-    await backstop.addSwapPool(address(_pool), 0);
-  };
+    await backstop.addSwapPool(address(pool), 0);
+  }
 
-  const testPoolCap = async () => {
-    assertEq((await backstop.poolCap()).toBigInt(), 2n ** 256n - 1n, "Expected pool to have max cap by default");
+  async function testPoolCap() {
+    assertEq(await backstop.poolCap(), 2n ** 256n - 1n, "Expected pool to have max cap by default");
 
     await backstop.deposit(unit(1));
 
-    const _reserves = (await backstop.coverage())[0].toBigInt();
-    const _newCap = _reserves + unit(1);
-    await backstop.setPoolCap(_newCap);
+    const [reserves] = await backstop.coverage();
+    const newCap = reserves + unit(1);
+    await backstop.setPoolCap(newCap);
 
     // Expectation: No revert
     await backstop.deposit(unit(1));
@@ -172,41 +174,81 @@ export default async function (environment: TestSuiteEnvironment) {
     // Expectation: Even tiny deposit fails, but cannot be minimally small or curve errors
     expectRevert("deposit: CAP_EXCEEDED");
     await backstop.deposit(microUnit(100));
-  };
+  }
 
-  const testOnlyOwnerCanSetPoolCap = async () => {
+  async function testOnlyOwnerCanSetPoolCap() {
     await backstop.setPoolCap(unit(100));
 
-    startPrank(namedAccounts.bob);
+    startPrank(BOB);
     expectRevert("Ownable: caller is not the owner");
     await backstop.setPoolCap(unit(100));
     stopPrank();
+  }
+
+  const changePoolCoverageTo = async (pool: TestContract, targetCoverageRatio: bigint) => {
+    const poolAsset = getContractByAddress(await pool.asset());
+
+    const [reserves, liabilities] = await pool.coverage();
+    const targetReserves = (liabilities * targetCoverageRatio) / 10n ** 18n;
+
+    if (targetReserves > reserves) {
+      await poolAsset.mint(address(pool), targetReserves - reserves);
+    } else {
+      startPrank(address(pool));
+      await poolAsset.transfer(tester, reserves - targetReserves);
+      stopPrank();
+    }
   };
 
-  const testBackstopDeposit = async () => {
-    const coverage = await backstop.coverage();
-    const _reservesBefore = coverage[0].toBigInt();
-    const _liabilitiesBefore = coverage[1].toBigInt();
-    const _poolShares = (await backstop.simulateDeposit(unit(10)))[0].toBigInt();
+  async function testBackstopDeposit() {
+    await changePoolCoverageTo(backstop, 10n ** 18n);
+    const [reservesBefore, liabilitiesBefore] = await backstop.coverage();
+    const [poolShares] = await backstop.simulateDeposit(unit(10));
 
-    expectEmit(backstop, "Mint", [testNamedAccount.accountId, _poolShares, unit(10)]);
-    const depositResult = await backstop.deposit(unit(10));
-    const _lpTokens = depositResult[0].toBigInt();
-    const _fee = depositResult[1].toBigInt();
+    expectEmit(backstop, "Mint", [tester, poolShares, unit(10)]);
+    const [lpTokens, fee] = await backstop.deposit(unit(10));
 
-    const coverageResult = await backstop.coverage();
-    const _reservesAfter = coverageResult[0].toBigInt();
-    const _liabilitiesAfter = coverageResult[1].toBigInt();
+    const [reservesAfter, liabilitiesAfter] = await backstop.coverage();
 
-    const backStopBalance = (await backstop.balanceOf(testNamedAccount.accountId)).toBigInt();
-    const usdBalance = (await usd.balanceOf(address(backstop))).toBigInt();
-    assertEq(backStopBalance, _lpTokens, "Returned amount of shares mismatch");
-    assertEq(usdBalance, _reservesAfter, "Returned reserves mismatch");
-    assertGt(_lpTokens, 0n, "Must have received LP tokens");
-    assertApproxEq(_fee, 0n, "Unexpected fee");
-    assertApproxEq(_liabilitiesAfter, _liabilitiesBefore + unit(10), "Final liabilities mismatch");
-    assertApproxEq(_reservesAfter, _reservesBefore + unit(10), "Final reserves mismatch");
-  };
+    const backStopBalance = await backstop.balanceOf(tester);
+    const usdBalance = await usd.balanceOf(address(backstop));
+    assertEq(backStopBalance, lpTokens, "Returned amount of shares mismatch");
+    assertEq(usdBalance, reservesAfter, "Returned reserves mismatch");
+    assertGt(lpTokens, 0n, "Must have received LP tokens");
+    assertApproxEq(fee, 0n, "Unexpected fee");
+    assertApproxEq(liabilitiesAfter, liabilitiesBefore + unit(10), "Final liabilities mismatch");
+    assertApproxEq(reservesAfter, reservesBefore + unit(10), "Final reserves mismatch");
+  }
+
+  async function testImmediateBackstopWithdrawal() {
+    const [lpTokens, fee] = await backstop.deposit(unit(20));
+    const [reservesBefore, liabilitiesBefore] = await backstop.coverage();
+    const [simulatedPayout] = await backstop.simulateWithdrawal((lpTokens * 3n) / 4n);
+
+    const backstopAsset = getContractByAddress(await backstop.asset());
+    expectEmit(backstop, "Transfer", [tester, 0, (lpTokens * 3n) / 4n]);
+    expectEmit(backstopAsset, "Transfer", [address(backstop), tester, simulatedPayout]);
+    expectEmit(backstop, "Burn", [tester, (lpTokens * 3n) / 4n, simulatedPayout]);
+
+    await backstop.withdraw((lpTokens * 3n) / 4n, unit(15));
+    const [reservesAfter, liabilitiesAfter] = await backstop.coverage();
+    assertApproxEq(await usd.balanceOf(tester), MINT_AMOUNT - unit(20) + unit(15), "usd balance mismatch");
+    assertApproxEq(await backstop.balanceOf(tester), lpTokens / 4n, "backstop lp token mismatch");
+    assertApproxEq(fee, 0n, "unexpected fee");
+    assertApproxEq(liabilitiesAfter, liabilitiesBefore - unit(15), "liabilities mismatch");
+    assertApproxEq(reservesAfter, reservesBefore - unit(15), "reserves mismatch");
+  }
+
+  /*const testPreventsBackstopWithdrawalForUncoveredPool = async () => {
+    SwapPool _pool = new SwapPool(address(asset1), address(nablaCurve), address(router), address(backstop), address(0), "Test LP 3", "LP3");
+    asset1.approve(address(_pool), MAX_UINT256);
+
+    (uint _lpTokens, ) = _pool.deposit(10 ether);
+    vm.roll(1001);
+
+    vm.expectRevert("redeemSwapPoolShares():NO_COVER");
+    backstop.redeemSwapPoolShares(address(swapPoolUsd), _lpTokens, 10 ether);
+}*/
 
   return {
     setUp,
@@ -215,5 +257,6 @@ export default async function (environment: TestSuiteEnvironment) {
     testPoolCap,
     testOnlyOwnerCanSetPoolCap,
     testBackstopDeposit,
+    testImmediateBackstopWithdrawal,
   };
 }

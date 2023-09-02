@@ -4,14 +4,12 @@ import { ContractPromise } from "@polkadot/api-contract";
 import { Event, WeightV2 } from "@polkadot/types/interfaces";
 import { AnyJson } from "@polkadot/types-codec/types";
 import { Abi } from "@polkadot/api-contract";
-import { KeyringPair } from "@polkadot/keyring/types";
 
 import { Address } from "../types";
 import { computeQuotient } from "../helpers/rationals";
 import { Project } from "../project";
 import { PanicCode, queryContract } from "./queryContract";
-import { PromiseMutex } from "../helpers/promiseMutex";
-import { SubmitTransactionStatus, submitTransaction } from "./submitTransaction";
+import { SubmitTransactionStatus, Submitter, getSubmitterAddress, submitTransaction } from "./submitTransaction";
 import { basicDeployContract } from "./deployContract";
 import { addressesAreEqual } from "../helpers/addresses";
 
@@ -19,12 +17,6 @@ export type SubmitTransactionResult<T> = {
   transactionFee: bigint | undefined;
   result: { type: "success"; value: T } | { type: "error"; error: string };
 };
-
-export interface Submitter {
-  accountId: Address;
-  keypair: KeyringPair;
-  mutex: PromiseMutex;
-}
 
 export interface DeployedContractInformation<MetadataId, DeployedContractId> {
   deploymentAddress: string;
@@ -177,15 +169,15 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
     contractMetadataId: MetadataId,
     eventIdentifier: string,
     args: unknown[]
-  ): Uint8Array | undefined => {
+  ): Uint8Array => {
     const contractMetadada = contractMetadataPool[contractMetadataId];
     if (contractMetadada === undefined) {
-      return undefined;
+      throw new Error(`No contract metadata for ${String(contractMetadataId)}`);
     }
 
     const event = contractMetadada.events.find((event) => event.identifier === eventIdentifier);
     if (event === undefined) {
-      return undefined;
+      throw new Error(`Event not defined ${eventIdentifier}`);
     }
 
     if (event.args.length !== args.length) {
@@ -243,7 +235,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       return contractMetadata.messages.map((message) => message.identifier);
     },
 
-    encodeContractEvent(deploymentAddress: Address, eventIdentifier: string, args: unknown[]): Uint8Array | undefined {
+    encodeContractEvent(deploymentAddress: Address, eventIdentifier: string, args: unknown[]): Uint8Array {
       const deployedContract = deployedContracts[deploymentAddress];
       if (deployedContract === undefined) {
         throw new Error(`Unknown contract at address ${deploymentAddress}`);
@@ -312,7 +304,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
         api,
         abi: contractMetadata,
         contractAddress: deploymentAddress,
-        callerAddress: submitter.keypair.address,
+        callerAddress: getSubmitterAddress(submitter),
         limits,
         messageName,
         messageArguments,
@@ -347,6 +339,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       );
 
       const { events, status, transactionFee } = await submitTransaction({
+        api,
         submitter,
         extrinsic,
         onReadyToSubmit,

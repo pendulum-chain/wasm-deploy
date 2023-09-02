@@ -3,10 +3,11 @@ import {
   ArgumentType,
   ContractSourcecodeId,
   DeployedContractId,
+  NamedAccount,
   NamedAccountId,
   NamedAccounts,
 } from "../types";
-import { Submitter, connectToChain } from "../api/api";
+import { connectToChain } from "../api/api";
 import { createAnimatedTextContext } from "../helpers/terminal";
 import { processScripts } from "../processScripts";
 import { initializeProject } from "../project";
@@ -22,12 +23,12 @@ export interface Deployment {
 }
 
 export interface TxOptions {
-  from: Submitter;
+  from: NamedAccount;
   log?: boolean;
 }
 
 export interface DeploymentArguments {
-  from: Submitter;
+  from: NamedAccount;
   contract: ContractSourcecodeId;
   args: ArgumentType[];
   log?: boolean;
@@ -70,16 +71,12 @@ export async function deploy(options: DeployOptions) {
 
   const chainApi = await connectToChain<ContractSourcecodeId, DeployedContractId>(networkConfig.rpcUrl);
 
-  const namedAccounts = await project.getAllNamedAccounts(networkName, chainApi.getKeyring());
-
-  const getNamedAccounts = async function (): Promise<NamedAccounts> {
-    return namedAccounts;
-  };
+  const signingSubmitters = await project.getAllSigningSubmitters(networkName, chainApi.getKeyring());
 
   const successful = await createAnimatedTextContext(async (updateDynamicText, addStaticText) => {
     await processScripts(
       await project.readDeploymentScripts(),
-      getNamedAccounts,
+      signingSubmitters,
       network,
       project,
       chainApi,

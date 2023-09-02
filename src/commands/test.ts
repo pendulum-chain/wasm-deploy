@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 
-import { Address, ArgumentType, ContractSourcecodeId, NamedAccounts } from "../types";
-import { ChainApi, Submitter, connectToChain } from "../api/api";
+import { Address, ArgumentType, ContractSourcecodeId } from "../types";
+import { ChainApi, connectToChain } from "../api/api";
 import { Project, initializeProject } from "../project";
 import { StyledText, createAnimatedTextContext } from "../helpers/terminal";
 import { compileContract } from "../actions/compileContract";
 import { toUnit } from "../helpers/rationals";
 import { PanicCode, explainPanicError } from "../api/queryContract";
+import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitTransaction";
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -22,23 +23,11 @@ export async function runTestSuits(options: RunTestSuitesOptions) {
 
   const chainApi = await connectToChain<ContractSourcecodeId, undefined>(networkConfig.rpcUrl);
 
-  const testNamedAccount = await project.getFullNamedAccount(
-    networkName,
-    testSuitConfig.testNamedAccount,
-    chainApi.getKeyring()
-  );
-  const namedAccounts = await project.getAllNamedAccounts(networkName, chainApi.getKeyring());
+  const tester = await project.getSigningSubmitter(networkName, testSuitConfig.tester, chainApi.getKeyring());
+  const root = await project.getSigningSubmitter(networkName, testSuitConfig.root, chainApi.getKeyring());
 
   const successful = await createAnimatedTextContext(async (updateDynamicText, addStaticText) => {
-    await processTestScripts(
-      project,
-      chainApi,
-      testNamedAccount,
-      namedAccounts,
-      testSuites,
-      updateDynamicText,
-      addStaticText
-    );
+    await processTestScripts(project, chainApi, tester, root, testSuites, updateDynamicText, addStaticText);
   });
 
   if (successful) {
@@ -86,12 +75,12 @@ export type TestSuiteEnvironment = {
   unit: (number: number | string | bigint, precision?: number) => bigint;
   milliUnit: (number: number | string | bigint, precision?: number) => bigint;
   microUnit: (number: number | string | bigint, precision?: number) => bigint;
-  startPrank: (namedAccount: Submitter) => void;
+  startPrank: (prankster: Address) => void;
   stopPrank: () => void;
   expectRevert: (message: string) => void;
   expectEmit: (contract: TestContract, eventIdentifier: string, args: unknown[]) => void;
-  testNamedAccount: Submitter;
-  namedAccounts: NamedAccounts;
+  getContractByAddress: (deploymentAddress: Address) => TestContract;
+  tester: Address;
   constructors: Record<string, TestConstructor>;
 };
 
@@ -112,16 +101,35 @@ export interface ExpectedEmit {
   encoding: Buffer;
 }
 
+function processValue(value: any): any {
+  if (value?.toRawType == undefined) {
+    return undefined;
+  }
+
+  switch (value.toRawType()) {
+    case "u256":
+    case "i256":
+      return value.toBigInt();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(processValue);
+  }
+
+  return value;
+}
+
 async function processTestScripts(
   project: Project,
   chainApi: ChainApi<ContractSourcecodeId, undefined>,
-  testNamedAccount: Submitter,
-  namedAccounts: NamedAccounts,
+  tester: SigningSubmitter,
+  root: SigningSubmitter,
   testSuites: [string, TestSuite][],
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ): Promise<void> {
   const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
+  const contractsByAddress: Record<Address, TestContract> = {};
   let deployerAccount: Submitter | undefined = undefined;
   let expectedRevertMessage: string | undefined = undefined;
   let expectedEmits: ExpectedEmit[] = [];
@@ -151,7 +159,7 @@ async function processTestScripts(
         contractMetadataId: contractSourcecodeId,
         deployedContractId: undefined,
         project,
-        submitter: deployerAccount ?? testNamedAccount,
+        submitter: deployerAccount ?? tester,
         constructorName: constructorName,
       });
 
@@ -179,7 +187,7 @@ async function processTestScripts(
             messageArguments: args,
             messageName,
             project,
-            submitter: deployerAccount ?? testNamedAccount,
+            submitter: deployerAccount ?? tester,
           });
 
           if (result.type === "reverted") {
@@ -218,10 +226,11 @@ async function processTestScripts(
 
           console.log("Done", contractSourcecodeId, messageName, result.value?.toHuman());
 
-          return result.value;
+          return processValue(result.value);
         };
       });
 
+      contractsByAddress[deploymentAddress] = deployedContract;
       return deployedContract;
     };
 
@@ -231,14 +240,22 @@ async function processTestScripts(
 
     const units = chainApi.getUnits();
 
-    const startPrank = (namedAccount: Submitter): void => {
-      console.log("startPrank", namedAccount.accountId);
-      deployerAccount = namedAccount;
+    const startPrank = (prankster: Address): void => {
+      const submitter: Submitter = {
+        type: "force",
+        accountId: prankster,
+        rootSigningSubmitter: root,
+      };
+
+      console.log("startPrank", prankster);
+      deployerAccount = submitter;
     };
+
     const stopPrank = (): void => {
       console.log("stopPrank");
       deployerAccount = undefined;
     };
+
     const expectRevert = (message: string): void => {
       expectedRevertMessage = message;
     };
@@ -247,9 +264,6 @@ async function processTestScripts(
       const contractAddress = address(contract);
 
       const encoding = chainApi.encodeContractEvent(contractAddress, eventIdentifier, args);
-      if (encoding === undefined) {
-        throw new Error(`Can't encode expected event for ${contractAddress}::${eventIdentifier} and arguments ${args}`);
-      }
 
       expectedEmits.push({
         args,
@@ -257,6 +271,15 @@ async function processTestScripts(
         encoding: Buffer.from(encoding),
         eventIdentifier,
       });
+    };
+
+    const getContractByAddress = (deploymentAddress: Address): TestContract => {
+      const contract = contractsByAddress[deploymentAddress];
+      if (contract === undefined) {
+        throw new Error(`No known contract at address ${deploymentAddress}`);
+      }
+
+      return contract;
     };
 
     const environmentForTestSuite: TestSuiteEnvironment = {
@@ -268,8 +291,8 @@ async function processTestScripts(
       stopPrank,
       expectRevert,
       expectEmit,
-      testNamedAccount,
-      namedAccounts,
+      getContractByAddress,
+      tester: getSubmitterAddress(tester),
       constructors: {},
     };
 
@@ -278,12 +301,12 @@ async function processTestScripts(
     }
 
     addStaticText([[{ text: "Process test suite " }, { text: testSuiteName, color: "cyan" }]], false);
-    const testSuiteInstance = await testSuite.default(environmentForTestSuite);
+    let testSuiteInstance = await testSuite.default(environmentForTestSuite);
     const tests = Object.keys(testSuiteInstance).filter((key) => key.startsWith("test") && key !== "setUp");
 
     for (const test of tests) {
       console.log(`\n\nRun test ${test}`);
-
+      testSuiteInstance = await testSuite.default(environmentForTestSuite);
       try {
         expectedRevertMessage = undefined;
         if (testSuiteInstance.setUp !== undefined) {

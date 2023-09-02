@@ -3,10 +3,9 @@ import { CodePromise, Abi } from "@polkadot/api-contract";
 import { AccountId, WeightV2, Event } from "@polkadot/types/interfaces";
 import { ITuple } from "@polkadot/types-codec/types";
 
-import { Submitter } from "./api";
 import { LimitsConfig } from "../parseConfig";
 import { Address } from "../types";
-import { SubmitTransactionStatus, submitTransaction } from "./submitTransaction";
+import { SubmitTransactionStatus, Submitter, submitTransaction } from "./submitTransaction";
 
 interface BasicDeployContractOptions {
   api: ApiPromise;
@@ -49,6 +48,7 @@ export async function basicDeployContract({
   const extrinsic = code.tx[constructorName]({ gasLimit, storageDepositLimit }, ...constructorArguments);
 
   const { events, status, transactionFee } = await submitTransaction({
+    api,
     submitter,
     extrinsic,
     onReadyToSubmit: onStartingDeployment,

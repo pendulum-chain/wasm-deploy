@@ -15,6 +15,7 @@ import {
   TxOptions,
   WasmDeployEnvironment,
 } from "./commands/deploy";
+import { SigningSubmitter, getSubmitterAddress } from "./api/submitTransaction";
 
 export type ContractDeploymentState =
   | "pending"
@@ -135,7 +136,7 @@ function renderMethodExecutionStatus(
 
 export async function processScripts(
   scripts: [ScriptName, DeployScript][],
-  getNamedAccounts: () => Promise<NamedAccounts>,
+  signingSubmitters: Record<string, SigningSubmitter>, //getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
   project: Project,
   chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>,
@@ -145,6 +146,14 @@ export async function processScripts(
   let executionStatuses: ExecutionStatus[] = [];
   const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
+  const submittersByAddress: Record<Address, SigningSubmitter> = {};
+  const namedAccounts: NamedAccounts = {};
+
+  Object.entries(signingSubmitters).forEach(([namedAccountId, signingSubmitter]) => {
+    const submitterAddress = getSubmitterAddress(signingSubmitter);
+    namedAccounts[namedAccountId] = { accountId: submitterAddress };
+    submittersByAddress[submitterAddress] = signingSubmitter;
+  });
 
   const updateDisplayedStatus = (asStaticText: boolean = false) => {
     const styledTexts = executionStatuses
@@ -205,7 +214,7 @@ export async function processScripts(
       contractMetadataId: args.contract,
       deployedContractId,
       project,
-      submitter: args.from,
+      submitter: submittersByAddress[args.from.accountId],
       constructorName: args.constructorName,
       onStartingDeployment: () => updateContractStatus("deploying"),
     });
@@ -266,7 +275,7 @@ export async function processScripts(
       messageArguments: rest,
       messageName: functionName,
       project,
-      submitter: tx.from,
+      submitter: submittersByAddress[tx.from.accountId],
       onPreflightExecuted: (gasRequired) => updateExecutionStatus("gas estimated", gasRequired),
       onReadyToSubmit: () => updateExecutionStatus("submitting"),
     });
@@ -299,7 +308,7 @@ export async function processScripts(
     };
 
     const environmentForScript: WasmDeployEnvironment = {
-      getNamedAccounts,
+      getNamedAccounts: async (): Promise<NamedAccounts> => namedAccounts,
       deployments: deploymentsForScript,
       network,
     };

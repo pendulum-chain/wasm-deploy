@@ -2,10 +2,37 @@ import { Event, AccountId32, DispatchError, DispatchInfo } from "@polkadot/types
 import { SubmittableExtrinsic } from "@polkadot/api/types";
 import { ISubmittableResult } from "@polkadot/types/types";
 import { INumber, ITuple } from "@polkadot/types-codec/types";
+import { Address } from "../types";
+import { KeyringPair } from "@polkadot/keyring/types";
+import { PromiseMutex } from "../helpers/promiseMutex";
+import { ApiPromise } from "@polkadot/api";
 
-import { Submitter } from "./api";
+export type Submitter = SigningSubmitter | ForceSubmitter;
+
+export interface SigningSubmitter {
+  type: "signing";
+  keypair: KeyringPair;
+  mutex: PromiseMutex;
+}
+
+export interface ForceSubmitter {
+  type: "force";
+  accountId: Address;
+  rootSigningSubmitter: SigningSubmitter;
+}
+
+export function getSubmitterAddress(submitter: Submitter): Address {
+  switch (submitter.type) {
+    case "signing":
+      return submitter.keypair.address;
+
+    case "force":
+      return submitter.accountId;
+  }
+}
 
 export interface SubmitTransactionOptions {
+  api: ApiPromise;
   submitter: Submitter;
   extrinsic: SubmittableExtrinsic<"promise", ISubmittableResult>;
   onReadyToSubmit?: () => void;
@@ -20,61 +47,83 @@ export interface SubmitTransactionResult {
 }
 
 export async function submitTransaction({
+  api,
   submitter,
   extrinsic,
   onReadyToSubmit,
 }: SubmitTransactionOptions): Promise<SubmitTransactionResult> {
-  return submitter.mutex.exclusive<SubmitTransactionResult>(async () => {
-    onReadyToSubmit?.();
+  switch (submitter.type) {
+    case "signing":
+      return submitter.mutex.exclusive<SubmitTransactionResult>(async () => {
+        onReadyToSubmit?.();
+        return actuallySubmit(extrinsic, submitter.keypair);
+      });
 
-    return await new Promise<SubmitTransactionResult>(async (resolve, reject) => {
-      try {
-        const unsub = await extrinsic.signAndSend(submitter.keypair, { nonce: -1 }, (update) => {
-          const { status, events: eventRecords } = update;
+    case "force": {
+      const wrappedExtrinsic = api.tx.utility.dispatchAs({ system: { signed: submitter.accountId } }, extrinsic);
+      const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(wrappedExtrinsic, 0);
 
-          const events = eventRecords.map(({ event }) => event);
-          if (status.isInBlock || status.isFinalized) {
-            let transactionFee: bigint | undefined = undefined;
-            let status: SubmitTransactionStatus | undefined = undefined;
+      return submitTransaction({
+        api,
+        submitter: submitter.rootSigningSubmitter,
+        extrinsic: sudoExtrinsic,
+        onReadyToSubmit,
+      });
+    }
+  }
+}
 
-            for (const event of events) {
-              const { data, section, method } = event;
+async function actuallySubmit(
+  extrinsic: SubmittableExtrinsic<"promise", ISubmittableResult>,
+  keypair: KeyringPair
+): Promise<SubmitTransactionResult> {
+  return await new Promise<SubmitTransactionResult>(async (resolve, reject) => {
+    try {
+      const unsub = await extrinsic.signAndSend(keypair, { nonce: -1 }, (update) => {
+        const { status, events: eventRecords } = update;
 
-              if (section === "transactionPayment" && method === "TransactionFeePaid") {
-                const [, actualFee] = data as unknown as ITuple<[AccountId32, INumber, INumber]>;
-                transactionFee = actualFee.toBigInt();
-              }
+        const events = eventRecords.map(({ event }) => event);
+        if (status.isInBlock || status.isFinalized) {
+          let transactionFee: bigint | undefined = undefined;
+          let status: SubmitTransactionStatus | undefined = undefined;
 
-              if (section === "system" && method === "ExtrinsicFailed") {
-                const [dispatchError] = data as unknown as ITuple<[DispatchError, DispatchInfo]>;
-                let message = dispatchError.type.toString();
+          for (const event of events) {
+            const { data, section, method } = event;
 
-                if (dispatchError.isModule) {
-                  try {
-                    const module = dispatchError.asModule;
-                    const error = dispatchError.registry.findMetaError(module);
-
-                    message = error.docs[0] ?? `${error.section}.${error.name}`;
-                  } catch {}
-                }
-
-                status = { type: "error", error: message };
-              }
-
-              if (section === "system" && method === "ExtrinsicSuccess") {
-                status = { type: "success" };
-              }
+            if (section === "transactionPayment" && method === "TransactionFeePaid") {
+              const [, actualFee] = data as unknown as ITuple<[AccountId32, INumber, INumber]>;
+              transactionFee = actualFee.toBigInt();
             }
 
-            if (status !== undefined) {
-              unsub();
-              resolve({ transactionFee, events, status });
+            if (section === "system" && method === "ExtrinsicFailed") {
+              const [dispatchError] = data as unknown as ITuple<[DispatchError, DispatchInfo]>;
+              let message = dispatchError.type.toString();
+
+              if (dispatchError.isModule) {
+                try {
+                  const module = dispatchError.asModule;
+                  const error = dispatchError.registry.findMetaError(module);
+
+                  message = error.docs[0] ?? `${error.section}.${error.name}`;
+                } catch {}
+              }
+
+              status = { type: "error", error: message };
+            }
+
+            if (section === "system" && method === "ExtrinsicSuccess") {
+              status = { type: "success" };
             }
           }
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
+
+          if (status !== undefined) {
+            unsub();
+            resolve({ transactionFee, events, status });
+          }
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
   });
 }
