@@ -6,8 +6,8 @@ import { Project, initializeProject } from "../project";
 import { StyledText, createAnimatedTextContext } from "../helpers/terminal";
 import { compileContract } from "../actions/compileContract";
 import { toUnit } from "../helpers/rationals";
-import { PanicCode, explainPanicError } from "../api/queryContract";
-import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitTransaction";
+import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitter";
+import { PanicCode } from "@pendulum-chain/api-solang";
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -44,8 +44,8 @@ class RevertError extends Error {
 }
 
 class PanicError extends Error {
-  constructor(errorCode: PanicCode) {
-    super(explainPanicError(errorCode));
+  constructor(errorCode: PanicCode, explanation: string) {
+    super(`${explanation} (code ${errorCode})`);
     this.name = "PanicError";
   }
 }
@@ -79,7 +79,8 @@ export type TestSuiteEnvironment = {
   stopPrank: () => void;
   expectRevert: (message: string) => void;
   expectEmit: (contract: TestContract, eventIdentifier: string, args: unknown[]) => void;
-  getContractByAddress: (deploymentAddress: Address) => TestContract;
+  getContractByAddress: (deploymentAddress: Address | Uint8Array) => TestContract;
+  mintNative: (account: Address, amount: bigint) => Promise<void>;
   tester: Address;
   constructors: Record<string, TestConstructor>;
 };
@@ -154,7 +155,7 @@ async function processTestScripts(
       const compiledContractFile = await readFile(compiledContractFileName);
       chainApi.registerMetadata(contractSourcecodeId, compiledContractFile.toString("utf8"));
 
-      const { status, contractEvents, deploymentAddress } = await chainApi.deployContract({
+      const result = await chainApi.deployContract({
         constructorArguments: args,
         contractMetadataId: contractSourcecodeId,
         deployedContractId: undefined,
@@ -163,19 +164,30 @@ async function processTestScripts(
         constructorName: constructorName,
       });
 
-      contractEvents.forEach((event) => {
+      if (result.type !== "success") {
+        switch (result.type) {
+          case "error":
+            console.log(`An error occurred: ${result.error}`);
+            break;
+          case "panic":
+            console.log(`A panic occurred: ${result.explanation} (code: ${result.errorCode})`);
+            break;
+          case "reverted":
+            console.log(`The contract reverted: ${result.description}`);
+            break;
+        }
+        throw new Error(`An error occurred deploying contract ${contractSourcecodeId}`);
+      }
+
+      const { events, deploymentAddress } = result;
+      events.forEach((event) => {
         console.log("Contract event", event.emittingContractAddress, event.data.toString("hex"));
         if (event.decoded !== undefined) {
           console.log("Decoded event", event.decoded.eventIdentifier, event.decoded.args);
         }
       });
 
-      if (status.type === "error") {
-        addStaticText([[{ text: `Error: ${status.error}` }]], false);
-        throw new Error(`An error occurred deploying contract ${contractSourcecodeId}`);
-      }
-
-      console.log("Deployed contract", contractSourcecodeId, "to", deploymentAddress, "with status", status);
+      console.log("Successfully deployed contract", contractSourcecodeId, "to", deploymentAddress);
 
       const deployedContract = { __internal: { deploymentAddress } } as TestContract;
       chainApi.getContractMessages(contractSourcecodeId).forEach((messageName) => {
@@ -194,7 +206,7 @@ async function processTestScripts(
             throw new RevertError(result.description);
           }
           if (result.type === "panic") {
-            throw new PanicError(result.errorCode);
+            throw new PanicError(result.errorCode, result.explanation);
           }
           if (result.type === "error") {
             throw new CallError(result.error);
@@ -251,8 +263,10 @@ async function processTestScripts(
       deployerAccount = submitter;
     };
 
-    const stopPrank = (): void => {
-      console.log("stopPrank");
+    const stopPrank = (showLog: boolean = true): void => {
+      if (showLog) {
+        console.log("stopPrank");
+      }
       deployerAccount = undefined;
     };
 
@@ -273,13 +287,21 @@ async function processTestScripts(
       });
     };
 
-    const getContractByAddress = (deploymentAddress: Address): TestContract => {
+    const getContractByAddress = (deploymentAddress: Address | Uint8Array): TestContract => {
+      if (typeof deploymentAddress !== "string") {
+        deploymentAddress = chainApi.getSS58Encoding(deploymentAddress);
+      }
+
       const contract = contractsByAddress[deploymentAddress];
       if (contract === undefined) {
         throw new Error(`No known contract at address ${deploymentAddress}`);
       }
 
       return contract;
+    };
+
+    const mintNative = async (account: Address, amount: bigint): Promise<void> => {
+      await chainApi.setFreeBalance(account, amount, root);
     };
 
     const environmentForTestSuite: TestSuiteEnvironment = {
@@ -292,6 +314,7 @@ async function processTestScripts(
       expectRevert,
       expectEmit,
       getContractByAddress,
+      mintNative,
       tester: getSubmitterAddress(tester),
       constructors: {},
     };
@@ -318,21 +341,21 @@ async function processTestScripts(
         await testSuiteInstance[test]();
         if (expectedRevertMessage !== undefined) {
           throw new Error(
-            `Test was expected to revert with message "${expectedRevertMessage}" but not revert happened.`
+            `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
           );
         }
       } catch (error: any) {
-        stopPrank();
+        stopPrank(false);
         expectedEmits = [];
         if (error.name === "RevertError") {
           const revertMessage = (error as RevertError).message;
           if (expectedRevertMessage === undefined) {
-            throw new Error(`Test unexpectedly reverted with message "${revertMessage}".`);
+            error.message = `Test unexpectedly reverted with message "${revertMessage}".`;
+            throw error;
           }
           if (revertMessage !== expectedRevertMessage) {
-            throw new Error(
-              `Test was expected to revert with message "${expectedRevertMessage}" but reverted with message "${revertMessage}"`
-            );
+            error.message = `Test was expected to revert with message "${expectedRevertMessage}" but reverted with message "${revertMessage}"`;
+            throw error;
           }
           console.log(`Test reverted as expected with message "${expectedRevertMessage}"`);
         } else {

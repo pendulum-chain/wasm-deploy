@@ -14,7 +14,7 @@ export function parseCommandLine() {
   program
     .command("pull")
     .description("Pull the latest version of the smart contracts from the upstream git repositories")
-    .argument("<folder>", "project folder")
+    .argument("<project>", "project folder")
     .action((str, _options) => {
       pull({ projectFolder: str });
     });
@@ -22,7 +22,7 @@ export function parseCommandLine() {
   program
     .command("deploy")
     .description("Run the project's deployment scripts")
-    .argument("<folder>", "project folder")
+    .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
     .action(async (str, options) => {
       deploy({ projectFolder: str, network: options.network });
@@ -31,7 +31,7 @@ export function parseCommandLine() {
   program
     .command("test")
     .description("Run the test suite defined in a project")
-    .argument("<folder>", "project folder")
+    .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
     .action(async (str, options) => {
       runTestSuits({ projectFolder: str, network: options.network });

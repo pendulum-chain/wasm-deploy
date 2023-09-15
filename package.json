@@ -25,6 +25,10 @@
     "blake2b": "^2.1.4",
     "commander": "^11.0.0",
     "fefe": "^3.2.0",
-    "ts-node": "^10.9.1"
-  }
+    "ts-node": "^10.9.1",
+    "@pendulum-chain/api-solang": "0.0.2"
+  },
+  "workspaces": [
+    "packages/api-solang"
+  ]
 }

@@ -17,25 +17,36 @@ const stdMath = (() => {
   return { abs, delta, percentDelta };
 })();
 
-export function assertEq(a: any, b: any, errorMessage: string): void {
+export function assertEq(a: any, b: any, errorMessage?: string): void {
   if (a !== b) {
-    throw new AssertionError(`${errorMessage} (expected left = right, left: ${a}, right: ${b})`);
+    const prefix = errorMessage ? `${errorMessage}: ` : "";
+    throw new AssertionError(`${prefix}(expected left = right, left: ${a}, right: ${b})`);
   }
   console.log("AssertEq okay", a, b);
 }
 
-export function assertGt(a: bigint, b: bigint, errorMessage: string): void {
+export function assertGt(a: bigint, b: bigint, errorMessage?: string): void {
   if (a <= b) {
-    throw new AssertionError(`${errorMessage} (expected left > right, left: ${a}, right: ${b})`);
+    const prefix = errorMessage ? `${errorMessage}: ` : "";
+    throw new AssertionError(`${prefix}(expected left > right, left: ${a}, right: ${b})`);
   }
   console.log("AssertGt okay", a, b);
 }
 
-export function assertApproxEqAbs(a: bigint, b: bigint, maxDelta: bigint, errorMessage: string): void {
+export function assertLt(a: bigint, b: bigint, errorMessage?: string): void {
+  if (a >= b) {
+    const prefix = errorMessage ? `${errorMessage}: ` : "";
+    throw new AssertionError(`${prefix}(expected left < right, left: ${a}, right: ${b})`);
+  }
+  console.log("AssertLt okay", a, b);
+}
+
+export function assertApproxEqAbs(a: bigint, b: bigint, maxDelta: bigint, errorMessage?: string): void {
   const delta = stdMath.delta(a, b);
 
   if (delta > maxDelta) {
-    throw new AssertionError(`${errorMessage} (expected a approx = right, left: ${a}, right: ${b})`);
+    const prefix = errorMessage ? `${errorMessage}: ` : "";
+    throw new AssertionError(`${prefix}(expected a approx = right, left: ${a}, right: ${b})`);
   }
   console.log("AssertEqAbs okay", a, b, delta, maxDelta);
 }
@@ -44,14 +55,15 @@ export function assertApproxEqRel(
   a: bigint,
   b: bigint,
   maxPercentDelta: bigint, // An 18 decimal fixed point number, where 10n ** 18n == 100%
-  errorMessage: string
+  errorMessage?: string
 ): void {
   if (b === 0n) return assertEq(a, b, errorMessage);
 
   const percentDelta = stdMath.percentDelta(a, b);
 
   if (percentDelta > maxPercentDelta) {
-    throw new AssertionError(`${errorMessage} (expected a approx = right, left: ${a}, right: ${b})`);
+    const prefix = errorMessage ? `${errorMessage}: ` : "";
+    throw new AssertionError(`${prefix}(expected a approx = right, left: ${a}, right: ${b})`);
   }
   console.log("AssertEqRel okay", a, b, percentDelta, maxPercentDelta);
 }

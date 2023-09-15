@@ -19,7 +19,7 @@ import { rawAddressesAreEqual } from "./helpers/addresses";
 import { PromiseMutex } from "./helpers/promiseMutex";
 import { TestSuite } from "./commands/test";
 import { DeployScript } from "./commands/deploy";
-import { SigningSubmitter } from "./api/submitTransaction";
+import { SigningSubmitter } from "./api/submitter";
 
 export type RepositoryInitialization = "npm" | "yarn";
 

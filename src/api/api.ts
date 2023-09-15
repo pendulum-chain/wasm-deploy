@@ -1,39 +1,32 @@
 import { WsProvider, ApiPromise, Keyring } from "@polkadot/api";
-import { BN_ZERO, u8aConcat } from "@polkadot/util";
-import { ContractPromise } from "@polkadot/api-contract";
-import { Event, WeightV2 } from "@polkadot/types/interfaces";
+import { u8aConcat } from "@polkadot/util";
+import { WeightV2 } from "@polkadot/types/interfaces";
 import { AnyJson } from "@polkadot/types-codec/types";
 import { Abi } from "@polkadot/api-contract";
 
 import { Address } from "../types";
 import { computeQuotient } from "../helpers/rationals";
 import { Project } from "../project";
-import { PanicCode, queryContract } from "./queryContract";
-import { SubmitTransactionStatus, Submitter, getSubmitterAddress, submitTransaction } from "./submitTransaction";
-import { basicDeployContract } from "./deployContract";
-import { addressesAreEqual } from "../helpers/addresses";
-
-export type SubmitTransactionResult<T> = {
-  transactionFee: bigint | undefined;
-  result: { type: "success"; value: T } | { type: "error"; error: string };
-};
+import {
+  SigningSubmitter,
+  Submitter,
+  extractSigningSubmitter,
+  getSubmitterAddress,
+  modifyExtrinsic,
+} from "./submitter";
+import {
+  DeployContractResult,
+  MessageCallResult,
+  SubmitExtrinsicResult,
+  deployContract,
+  messageCall,
+  submitExtrinsic,
+} from "@pendulum-chain/api-solang";
 
 export interface DeployedContractInformation<MetadataId, DeployedContractId> {
   deploymentAddress: string;
   id: DeployedContractId;
   contractMetadataId: MetadataId;
-}
-
-export interface DecodedContractEvent<DeployedContractId> {
-  deployedContractId: DeployedContractId;
-  eventIdentifier: string;
-  args: { name: string; value: AnyJson }[];
-}
-
-export interface ContractEvent<DeployedContractId> {
-  emittingContractAddress: Address;
-  data: Buffer;
-  decoded?: DecodedContractEvent<DeployedContractId>;
 }
 
 export interface DeployContractOptions<MetadataId, DeployedContractId> {
@@ -46,13 +39,6 @@ export interface DeployContractOptions<MetadataId, DeployedContractId> {
   onStartingDeployment?: () => void;
 }
 
-export interface DeployContractResult<DeployedContractId> {
-  contractEvents: ContractEvent<DeployedContractId>[];
-  deploymentAddress: Address;
-  transactionFee: bigint | undefined;
-  status: SubmitTransactionStatus;
-}
-
 export interface MessageCallOptions {
   deploymentAddress: Address;
   submitter: Submitter;
@@ -60,19 +46,7 @@ export interface MessageCallOptions {
   messageArguments: unknown[];
   project: Project;
   onReadyToSubmit?(): void;
-  onPreflightExecuted?(gasRequired: WeightV2): void;
 }
-
-export type MessageCallResult<DeployedContractId> = {
-  execution:
-    | { type: "onlyQuery" }
-    | { type: "extrinsic"; contractEvents: ContractEvent<DeployedContractId>[]; transactionFee: bigint | undefined };
-  result:
-    | { type: "success"; value: any }
-    | { type: "error"; error: string }
-    | { type: "reverted"; description: string }
-    | { type: "panic"; errorCode: PanicCode };
-};
 
 type Key = string | number | symbol;
 
@@ -126,43 +100,13 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
   const deployedContracts: Record<Address, DeployedContractInformation<MetadataId, DeployedContractId>> = {};
   const contractMetadataPool: Partial<Record<MetadataId, Abi>> = {};
 
-  const decodeContractEvents = (events: Event[]): ContractEvent<DeployedContractId>[] => {
-    return events
-      .filter(({ section, method }) => section === "contracts" && method === "ContractEmitted")
-      .map(({ data }): ContractEvent<DeployedContractId> => {
-        const dataJson = data.toHuman() as { contract: string; data: string };
-        const emittingContractAddress = dataJson.contract;
-        const buffer = Buffer.from(dataJson.data.slice(2), "hex");
+  const lookupAbi = (contractAddress: Address): Abi | undefined => {
+    const deployedContract = deployedContracts[contractAddress];
+    if (deployedContract === undefined) {
+      return undefined;
+    }
 
-        for (const entry of Object.entries(deployedContracts)) {
-          if (addressesAreEqual(entry[0], emittingContractAddress, keyring)) {
-            const contractMetadataId = entry[1].contractMetadataId;
-            const contractMetadada = contractMetadataPool[contractMetadataId];
-
-            if (contractMetadada !== undefined) {
-              const decodedEvent = contractMetadada.decodeEvent(buffer);
-
-              return {
-                emittingContractAddress,
-                data: buffer,
-                decoded: {
-                  args: decodedEvent.event.args.map((arg, index) => ({
-                    name: arg.name,
-                    value: decodedEvent.args[index].toHuman(),
-                  })),
-                  deployedContractId: entry[1].id,
-                  eventIdentifier: decodedEvent.event.identifier,
-                },
-              };
-            }
-          }
-        }
-
-        return {
-          emittingContractAddress,
-          data: buffer,
-        };
-      });
+    return contractMetadataPool[deployedContract.contractMetadataId];
   };
 
   const encodeContractEvent = (
@@ -218,6 +162,10 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       };
     },
 
+    getSS58Encoding(binaryAddress: Uint8Array): string {
+      return keyring.addFromAddress(binaryAddress).address;
+    },
+
     registerMetadata(contractMetadataId: MetadataId, metadataString: string) {
       if (contractMetadataPool[contractMetadataId] !== undefined) {
         return;
@@ -244,6 +192,14 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       return encodeContractEvent(deployedContract.contractMetadataId, eventIdentifier, args);
     },
 
+    lookupIdOfDeployedContract(deploymentAddress: Address): DeployedContractId | undefined {
+      const deployedContract = deployedContracts[deploymentAddress];
+      if (deployedContract === undefined) {
+        return undefined;
+      }
+      return deployedContract.id;
+    },
+
     async deployContract({
       constructorArguments,
       contractMetadataId,
@@ -252,30 +208,54 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       submitter,
       constructorName,
       onStartingDeployment,
-    }: DeployContractOptions<MetadataId, DeployedContractId>): Promise<DeployContractResult<DeployedContractId>> {
+    }: DeployContractOptions<MetadataId, DeployedContractId>): Promise<DeployContractResult> {
       const contractMetadata = contractMetadataPool[contractMetadataId];
       if (contractMetadata === undefined) {
         throw new Error(`Contract metadata for ${String(contractMetadataId)} undefined`);
       }
 
-      const { events, deploymentAddress, status, transactionFee } = await basicDeployContract({
-        api,
-        contractMetadata,
-        constructorArguments,
-        constructorName,
-        limits: project.getLimits(),
-        submitter,
-        onStartingDeployment,
+      const signingSubmitter = extractSigningSubmitter(submitter);
+
+      const result = await signingSubmitter.mutex.exclusive<DeployContractResult>(async () => {
+        onStartingDeployment?.();
+
+        return await deployContract({
+          signer: {
+            type: "keypair",
+            keypair: signingSubmitter.keypair,
+          },
+          api,
+          abi: contractMetadata,
+          constructorArguments,
+          constructorName,
+          limits: project.getLimits(),
+          modifyExtrinsic: modifyExtrinsic.bind(null, api, submitter),
+          lookupAbi,
+        });
       });
 
-      deployedContracts[deploymentAddress] = { contractMetadataId, deploymentAddress, id: deployedContractId };
+      if (result.type === "success") {
+        const { deploymentAddress } = result;
+        deployedContracts[deploymentAddress] = { contractMetadataId, deploymentAddress, id: deployedContractId };
+      }
 
-      return {
-        contractEvents: decodeContractEvents(events),
-        deploymentAddress,
-        transactionFee,
-        status,
-      };
+      return result;
+    },
+
+    async setFreeBalance(
+      address: Address,
+      amount: bigint,
+      rootSigningSubmitter: SigningSubmitter
+    ): Promise<SubmitExtrinsicResult> {
+      const setBalanceExtrinsic = api.tx.balances.setBalance(address, amount, 0);
+      const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
+
+      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
+        submitExtrinsic(sudoExtrinsic, {
+          type: "keypair",
+          keypair: rootSigningSubmitter.keypair,
+        })
+      );
     },
 
     async messageCall({
@@ -285,8 +265,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       project,
       submitter,
       onReadyToSubmit,
-      onPreflightExecuted,
-    }: MessageCallOptions): Promise<MessageCallResult<DeployedContractId>> {
+    }: MessageCallOptions): Promise<MessageCallResult> {
       const deployedContract = deployedContracts[deploymentAddress];
       if (deployedContract === undefined) {
         throw new Error(`Unknown contract at address ${deploymentAddress}`);
@@ -297,58 +276,31 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
         throw new Error(`Unknown contract metadata for id ${String(deployedContract.contractMetadataId)}`);
       }
 
-      const contract = new ContractPromise(api, contractMetadata, deploymentAddress);
-      const limits = project.getLimits();
+      const signingSubmitter = extractSigningSubmitter(submitter);
 
-      const { gasRequired, output } = await queryContract({
-        api,
-        abi: contractMetadata,
-        contractAddress: deploymentAddress,
-        callerAddress: getSubmitterAddress(submitter),
-        limits,
-        messageName,
-        messageArguments,
-      });
-
-      onPreflightExecuted?.(gasRequired);
-
-      switch (output.type) {
-        case "reverted":
-          return { execution: { type: "onlyQuery" }, result: output };
-        case "panic":
-          return { execution: { type: "onlyQuery" }, result: output };
-        case "error":
-          return {
-            execution: { type: "onlyQuery" },
-            result: { type: "error", error: output.error?.type ?? "unknown" },
-          };
+      try {
+        return await messageCall({
+          abi: contractMetadata,
+          api,
+          messageArguments,
+          contractDeploymentAddress: deploymentAddress,
+          messageName,
+          limits: project.getLimits(),
+          callerAddress: getSubmitterAddress(submitter),
+          getSigner: async () => {
+            await signingSubmitter.mutex.startExclusive();
+            onReadyToSubmit?.();
+            return {
+              type: "keypair",
+              keypair: signingSubmitter.keypair,
+            };
+          },
+          modifyExtrinsic: modifyExtrinsic.bind(null, api, submitter),
+          lookupAbi,
+        });
+      } finally {
+        signingSubmitter.mutex.endExclusive();
       }
-
-      const message = contractMetadata.findMessage(messageName);
-      if (!message.isMutating) {
-        return { execution: { type: "onlyQuery" }, result: output };
-      }
-
-      const typesAddress = api.registry.createType("AccountId", deploymentAddress);
-      const extrinsic = api.tx.contracts.call(
-        typesAddress,
-        BN_ZERO,
-        gasRequired,
-        limits.storageDeposit,
-        contract.abi.findMessage(messageName).toU8a(messageArguments)
-      );
-
-      const { events, status, transactionFee } = await submitTransaction({
-        api,
-        submitter,
-        extrinsic,
-        onReadyToSubmit,
-      });
-
-      return {
-        execution: { type: "extrinsic", contractEvents: decodeContractEvents(events), transactionFee },
-        result: status.type === "success" ? { type: "success", value: output.value } : status,
-      };
     },
   };
 }

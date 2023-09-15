@@ -54,7 +54,7 @@
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
-      "branch": "master"
+      "branch": "32-support-latest-solang-version"
     }
   },
   "networks": {

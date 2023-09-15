@@ -2,7 +2,7 @@ import { WeightV2 } from "@polkadot/types/interfaces";
 import { readFile } from "node:fs/promises";
 
 import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName } from "./types";
-import { ChainApi, DecodedContractEvent } from "./api/api";
+import { ChainApi } from "./api/api";
 import { StyledText } from "./helpers/terminal";
 import { compileContract } from "./actions/compileContract";
 import { Project } from "./project";
@@ -15,7 +15,8 @@ import {
   TxOptions,
   WasmDeployEnvironment,
 } from "./commands/deploy";
-import { SigningSubmitter, getSubmitterAddress } from "./api/submitTransaction";
+import { SigningSubmitter, getSubmitterAddress } from "./api/submitter";
+import { DecodedContractEvent } from "@pendulum-chain/api-solang";
 
 export type ContractDeploymentState =
   | "pending"
@@ -27,6 +28,10 @@ export type ContractDeploymentState =
   | "deployed"
   | "failure";
 
+interface ContractEvent extends DecodedContractEvent {
+  deployedContractId: DeployedContractId | undefined;
+}
+
 interface ContractDeploymentStatus {
   contractFileId: ContractSourcecodeId;
   deployedContractId: DeployedContractId;
@@ -34,16 +39,16 @@ interface ContractDeploymentStatus {
   address?: Address;
   failure?: string;
   transactionFee?: bigint;
-  events: DecodedContractEvent<DeployedContractId>[];
+  events: ContractEvent[];
 }
 
-export type MethodExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
+export type MethodExecutionState = "pending" | "dry running" | "submitting" | "success" | "failure";
 
 interface MethodExecutionStatus {
   deployedContractId: DeployedContractId;
   functionName: string;
   state: MethodExecutionState;
-  events: DecodedContractEvent<DeployedContractId>[];
+  events: ContractEvent[];
   gasRequired?: WeightV2;
   transactionFee?: bigint;
   transactionResult?: string;
@@ -56,13 +61,13 @@ type ExecutionStatus =
   | { type: "contractDeployment"; status: ContractDeploymentStatus }
   | { type: "methodExecution"; status: MethodExecutionStatus };
 
-function renderEvents(events: DecodedContractEvent<DeployedContractId>[]): StyledText[] {
+function renderEvents(events: ContractEvent[]): StyledText[] {
   const result: StyledText[] = [];
 
   events.forEach(({ args, deployedContractId, eventIdentifier }) => {
     result.push([
       { text: "    🎉 Event " },
-      { text: deployedContractId, color: "blue" },
+      ...(deployedContractId !== undefined ? [{ text: deployedContractId, color: "blue" as "blue" }] : []),
       { text: "." },
       { text: eventIdentifier, color: "green" },
     ]);
@@ -209,7 +214,7 @@ export async function processScripts(
     const compiledContractFile = await readFile(compiledContractFileName);
     chainApi.registerMetadata(args.contract, compiledContractFile.toString("utf8"));
 
-    const { status, transactionFee, contractEvents, deploymentAddress } = await chainApi.deployContract({
+    const result = await chainApi.deployContract({
       constructorArguments: args.args,
       contractMetadataId: args.contract,
       deployedContractId,
@@ -219,19 +224,36 @@ export async function processScripts(
       onStartingDeployment: () => updateContractStatus("deploying"),
     });
 
-    contractEvents.forEach((event) => {
-      if (event.decoded !== undefined) {
-        contractDeploymentStatus.events.push(event.decoded);
-      }
-    });
+    if (result.type === "success") {
+      result.events.forEach((event) => {
+        if (event.decoded !== undefined) {
+          contractDeploymentStatus.events.push({
+            ...event.decoded,
+            deployedContractId: chainApi.lookupIdOfDeployedContract(event.emittingContractAddress),
+          });
+        }
+      });
+    }
 
-    contractDeploymentStatus.transactionFee = transactionFee;
-    if (status.type === "error") {
-      contractDeploymentStatus.failure = `${status.error}`;
+    if (result.type !== "success") {
+      switch (result.type) {
+        case "error":
+          contractDeploymentStatus.failure = `Error: ${result.error}`;
+          break;
+        case "panic":
+          contractDeploymentStatus.failure = `Panic: ${result.explanation} (code: ${result.errorCode})`;
+          break;
+        case "reverted":
+          contractDeploymentStatus.failure = `Revert: ${result.description}`;
+          break;
+      }
       updateContractStatus("failure");
 
-      throw new Error(`An error occurred deploying contract (${status.type}): ${deployedContractId}`);
+      throw new Error(`An error occurred deploying contract (${result.type}): ${deployedContractId}`);
     }
+
+    const { transactionFee, deploymentAddress } = result;
+    contractDeploymentStatus.transactionFee = transactionFee;
 
     const deployment: Deployment = {
       address: deploymentAddress,
@@ -276,7 +298,6 @@ export async function processScripts(
       messageName: functionName,
       project,
       submitter: submittersByAddress[tx.from.accountId],
-      onPreflightExecuted: (gasRequired) => updateExecutionStatus("gas estimated", gasRequired),
       onReadyToSubmit: () => updateExecutionStatus("submitting"),
     });
 
@@ -284,7 +305,10 @@ export async function processScripts(
       methodExecutionStatus.transactionFee = execution.transactionFee;
       execution.contractEvents.forEach((event) => {
         if (event.decoded !== undefined) {
-          methodExecutionStatus.events.push(event.decoded);
+          methodExecutionStatus.events.push({
+            ...event.decoded,
+            deployedContractId: chainApi.lookupIdOfDeployedContract(event.emittingContractAddress),
+          });
         }
       });
     }
