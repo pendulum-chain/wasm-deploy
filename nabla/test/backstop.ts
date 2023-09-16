@@ -17,6 +17,7 @@ export default async function (environment: TestSuiteEnvironment) {
     expectEmit,
     getContractByAddress,
     mintNative,
+    roll,
     tester,
     constructors: {
       newRouter,
@@ -243,9 +244,8 @@ export default async function (environment: TestSuiteEnvironment) {
       await asset1.approve(address(pool), MAX_UINT256);
 
       const [lpTokens] = await pool.deposit(unit(10));
-      // TODO: why is this in the test?
-      // roll(1001);
 
+      await roll(1001);
       expectRevert("redeemSwapPoolShares():NO_COVER");
 
       // TODO: the original test uses address(swapPoolUsd) instead of address(pool)
@@ -337,8 +337,7 @@ export default async function (environment: TestSuiteEnvironment) {
       const [backstopReservesBefore, backstopLiabBefore] = await backstop.coverage();
       const [swapReservesBefore, swapLiabBefore] = await swapPool2.coverage();
 
-      // what to do here?
-      //vm.roll(1001);
+      await roll(1001);
 
       // Check CoverSwapWithdrawal event
       expectEmit(backstop, "CoverSwapWithdrawal", [
@@ -374,6 +373,23 @@ export default async function (environment: TestSuiteEnvironment) {
       );
       assertApproxEq(swapLiabAfter, swapLiabBefore - unit(5), "unexpected swap liabilities delta");
       assertApproxEq(swapReservesAfter, swapReservesBefore, "unexpected swap reserves delta");
+    },
+
+    async testSwapPoolBackstopWithdrawalLowCoverageOnly() {
+      await depositInto(swapPool1, unit(20));
+      await depositInto(swapPool2, unit(20));
+      await changePoolCoverageTo(swapPool1, 10n ** 18n);
+      await changePoolCoverageTo(swapPool2, 15n * 10n ** 17n);
+      const lpTokens1 = await swapPool1.balanceOf(tester);
+      const lpTokens2 = await swapPool2.balanceOf(tester);
+
+      await roll(1001);
+
+      expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
+      await backstop.redeemSwapPoolShares(address(swapPool1), lpTokens1 / 4n, 0);
+
+      expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
+      await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens2 / 4n, 0);
     },
   };
 }

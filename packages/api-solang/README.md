@@ -1,19 +1,21 @@
 # Polkadot API for Smart Contracts compiled via Solang
 
-This is a library that allows to deploy and call into smart contracts that have been deployed from Solidity to wasm via Solang.
+This library allows to deploy and call into smart contracts that have been compiled from Solidity to wasm via Solang.
 
-It has two main features:
+It has two main functions:
 
 - deploy (instantiate) a smart contract
 - execute a message call to an existing smart contract
 
-These features are meant to be used very flexibly and they have the following special features:
+These functions are meant to be used very flexibly and they have the following special features:
 
 1. Both functions allow to either specify a keypair or a general signer in order to sign the extrinsics. The keypair is generally useful for command line tools whereas the signer is more useful in a browser context, where it can give access to a wallets or browser extensions.
 
 2. In certain applications it can be necessary to extend the extrinsics created by these two functions, e.g., to wrap them into a sudo call. For that reason these functions allow to specify an optional argument `modifyExtrinsic` that allows the caller to arbitrarily change or extend the created extrinsic.
 
 3. Contracts usually emit events and these events can be emitted by contracts (recursively) called by the original contract. In order to properly decode the binary data contained in the event, one needs to lookup the abi of the respective contract emitting the event. For that reason both functions take an optional argument `lookupAbi` that allows the caller to provide the abi for any deployed contract (identified through the contract address).
+
+4. They can correctly decode the return value of message calls, i.e., whether a message call reverted (including the revert message) or whether it panicked and why it panicked.
 
 ## Deploy a smart contract
 

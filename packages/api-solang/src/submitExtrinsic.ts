@@ -32,7 +32,6 @@ export function getSignerAddress(signer: KeyPairSigner | GenericSigner) {
   switch (signer.type) {
     case "keypair":
       return signer.keypair.address;
-      break;
 
     case "signer":
       return signer.address;

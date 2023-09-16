@@ -1,7 +1,7 @@
 import { ApiPromise } from "@polkadot/api";
 import { BN_ZERO } from "@polkadot/util";
 import { ContractPromise } from "@polkadot/api-contract";
-import { Event, WeightV2 } from "@polkadot/types/interfaces";
+import { Event } from "@polkadot/types/interfaces";
 import { AnyJson } from "@polkadot/types-codec/types";
 import { Abi } from "@polkadot/api-contract";
 

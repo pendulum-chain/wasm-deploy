@@ -258,6 +258,21 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       );
     },
 
+    async skipBlocks(
+      noOfBlocks: bigint | number,
+      rootSigningSubmitter: SigningSubmitter
+    ): Promise<SubmitExtrinsicResult> {
+      const setBalanceExtrinsic = api.tx.contracts.skipBlocks(noOfBlocks);
+      const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
+
+      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
+        submitExtrinsic(sudoExtrinsic, {
+          type: "keypair",
+          keypair: rootSigningSubmitter.keypair,
+        })
+      );
+    },
+
     async messageCall({
       messageArguments,
       deploymentAddress,

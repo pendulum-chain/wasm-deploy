@@ -81,6 +81,7 @@ export type TestSuiteEnvironment = {
   expectEmit: (contract: TestContract, eventIdentifier: string, args: unknown[]) => void;
   getContractByAddress: (deploymentAddress: Address | Uint8Array) => TestContract;
   mintNative: (account: Address, amount: bigint) => Promise<void>;
+  roll: (noOfBlocks: bigint | number) => Promise<void>;
   tester: Address;
   constructors: Record<string, TestConstructor>;
 };
@@ -202,14 +203,29 @@ async function processTestScripts(
             submitter: deployerAccount ?? tester,
           });
 
-          if (result.type === "reverted") {
-            throw new RevertError(result.description);
-          }
-          if (result.type === "panic") {
-            throw new PanicError(result.errorCode, result.explanation);
-          }
-          if (result.type === "error") {
-            throw new CallError(result.error);
+          let resultValue: any = undefined;
+
+          switch (result.type) {
+            case "success":
+              resultValue = result.value;
+              if (expectedRevertMessage !== undefined) {
+                throw new Error(
+                  `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
+                );
+              }
+              break;
+            case "reverted":
+              if (expectedRevertMessage !== undefined && expectedRevertMessage === result.description) {
+                console.log(`Test reverted as expected with message "${expectedRevertMessage}"`);
+                expectedRevertMessage = undefined;
+              } else {
+                throw new RevertError(result.description);
+              }
+              break;
+            case "panic":
+              throw new PanicError(result.errorCode, result.explanation);
+            case "error":
+              throw new CallError(result.error);
           }
 
           if (execution.type === "extrinsic") {
@@ -236,9 +252,8 @@ async function processTestScripts(
             );
           }
 
-          console.log("Done", contractSourcecodeId, messageName, result.value?.toHuman());
-
-          return processValue(result.value);
+          console.log("Done", contractSourcecodeId, messageName, resultValue?.toHuman());
+          return processValue(resultValue);
         };
       });
 
@@ -304,6 +319,11 @@ async function processTestScripts(
       await chainApi.setFreeBalance(account, amount, root);
     };
 
+    const roll = async (noOfBlocks: bigint | number): Promise<void> => {
+      console.log(`Skip ${String(noOfBlocks)} blocks`);
+      await chainApi.skipBlocks(noOfBlocks, root);
+    };
+
     const environmentForTestSuite: TestSuiteEnvironment = {
       address,
       unit: toUnit.bind(null, units.unit),
@@ -315,6 +335,7 @@ async function processTestScripts(
       expectEmit,
       getContractByAddress,
       mintNative,
+      roll,
       tester: getSubmitterAddress(tester),
       constructors: {},
     };
@@ -347,20 +368,17 @@ async function processTestScripts(
       } catch (error: any) {
         stopPrank(false);
         expectedEmits = [];
+
         if (error.name === "RevertError") {
           const revertMessage = (error as RevertError).message;
           if (expectedRevertMessage === undefined) {
             error.message = `Test unexpectedly reverted with message "${revertMessage}".`;
-            throw error;
-          }
-          if (revertMessage !== expectedRevertMessage) {
+          } else {
             error.message = `Test was expected to revert with message "${expectedRevertMessage}" but reverted with message "${revertMessage}"`;
-            throw error;
           }
-          console.log(`Test reverted as expected with message "${expectedRevertMessage}"`);
-        } else {
-          throw error;
         }
+
+        throw error;
       }
     }
   }

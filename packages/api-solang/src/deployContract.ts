@@ -1,6 +1,6 @@
 import { ApiPromise } from "@polkadot/api";
 import { CodePromise, Abi } from "@polkadot/api-contract";
-import { AccountId, WeightV2, Event } from "@polkadot/types/interfaces";
+import { AccountId, Event } from "@polkadot/types/interfaces";
 import { ITuple } from "@polkadot/types-codec/types";
 
 import { Limits, Address } from "./index.js";

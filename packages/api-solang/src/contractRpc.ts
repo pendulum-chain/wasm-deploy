@@ -7,10 +7,10 @@ import {
   Weight,
 } from "@polkadot/types/interfaces";
 import { BN_ZERO } from "@polkadot/util";
+import { TypeDef } from "@polkadot/types/types";
 
 import { Address, Limits } from "./index.js";
 import { extractDispatchErrorDescription } from "./dispatchError.js";
-import { TypeDef } from "@polkadot/types/types";
 
 export interface QueryContractOptions {
   api: ApiPromise;
