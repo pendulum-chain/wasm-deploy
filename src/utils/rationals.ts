@@ -35,6 +35,7 @@ export function approximateAsFraction(number: number): { numerator: number; deno
   if (number === 0) {
     return { numerator: 0, denominator: 1 };
   }
+
   // approximate number as fraction constructing continued fraction
   let [numerator1, denominator1] = [0, 1];
   let [numerator2, denominator2] = [1, 0];

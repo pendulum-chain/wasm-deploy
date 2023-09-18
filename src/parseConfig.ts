@@ -1,5 +1,6 @@
 import {
   array,
+  boolean,
   enumerate,
   isFailure,
   isSuccess,
@@ -24,8 +25,9 @@ const validateImportMap = object(
 export type ContractConfiguration = ValidatorReturnType<typeof validateContractSourceReference>;
 const validateContractSourceReference = object(
   {
-    repository: string(),
+    repository: optional(string()),
     path: string(),
+    isPrecompiled: optional(boolean()),
     importpaths: optional(array(string())),
     importmaps: optional(array(validateImportMap)),
   },

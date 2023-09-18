@@ -50,11 +50,19 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
   const getGitCloneFolder = (contractId: ContractSourcecodeId): string => {
     const contractSource = getContractConfiguration(contractId);
+    if (contractSource.repository === undefined) {
+      return projectFolder;
+    }
+
     return join(gitFolder, contractSource.repository);
   };
 
-  const getRepositoryConfig = (contractId: string): RepositoryConfig => {
+  const getRepositoryConfig = (contractId: string): RepositoryConfig | undefined => {
     const { repository } = getContractConfiguration(contractId);
+    if (repository === undefined) {
+      return undefined;
+    }
+
     const repositoryConfig = configuration.repositories[repository];
     if (repositoryConfig === undefined)
       throw new Error(`Repository ${repository} does not exist in project ${relativeProjectPath}`);
@@ -147,7 +155,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
         importpaths = contractConfig.importpaths;
       } else {
         const repositoryConfig = getRepositoryConfig(contractId);
-        if (repositoryConfig.importpaths !== undefined) {
+        if (repositoryConfig?.importpaths !== undefined) {
           importpaths = repositoryConfig.importpaths;
         }
       }
@@ -164,7 +172,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
         importmaps = contractConfig.importmaps;
       } else {
         const repositoryConfig = getRepositoryConfig(contractId);
-        if (repositoryConfig.importmaps !== undefined) {
+        if (repositoryConfig?.importmaps !== undefined) {
           importmaps = repositoryConfig.importmaps;
         }
       }
@@ -174,8 +182,13 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     getContractSourcePath(contractId: ContractSourcecodeId): string {
-      const contractSource = getContractConfiguration(contractId);
-      return join(getGitCloneFolder(contractId), contractSource.path);
+      const contractConfiguration = getContractConfiguration(contractId);
+      return join(getGitCloneFolder(contractId), contractConfiguration.path);
+    },
+
+    isContractPrecompiled(contractId: ContractSourcecodeId): boolean {
+      const contractConfiguration = getContractConfiguration(contractId);
+      return contractConfiguration.isPrecompiled === true;
     },
 
     async readDeploymentScripts(): Promise<[ScriptName, DeployScript][]> {

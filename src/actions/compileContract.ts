@@ -1,5 +1,5 @@
 import { join, basename } from "node:path";
-import { readFile, writeFile, rename } from "node:fs/promises";
+import { readFile, writeFile, rename, copyFile } from "node:fs/promises";
 import blake2b from "blake2b";
 
 import { runCommand } from "../utils/childProcess";
@@ -52,6 +52,11 @@ async function actuallyCompileContract(
 
   const importpaths = project.getImportPaths(contractId);
   const importmaps = project.getImportMaps(contractId);
+
+  if (project.isContractPrecompiled(contractId)) {
+    await copyFile(contractSourceName, metadataFileName);
+    return metadataFileName;
+  }
 
   updateContractStatus("compiling");
   const solangResult = await runCommand([
