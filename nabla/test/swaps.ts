@@ -14,7 +14,6 @@ import {
   e,
 } from "../../src/index";
 
-const CHARLIE = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
 const FERDIE = "6hXHGkma9bKW6caAA5Z9Pto8Yxh9BbD8ckE15hSAhbMdF7RC";
 
 export default async function (environment: TestSuiteEnvironment) {
@@ -25,15 +24,7 @@ export default async function (environment: TestSuiteEnvironment) {
     getContractByAddress,
     vm,
     tester,
-    constructors: {
-      newRouter,
-      newMockERC20,
-      newSwapPool,
-      newMockOracle,
-      ewMockERC20,
-      newNablaCurve,
-      newTestableSwapPool,
-    },
+    constructors: { newRouter, newMockERC20, newSwapPool, newMockOracle, newNablaCurve },
   } = environment;
 
   function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {

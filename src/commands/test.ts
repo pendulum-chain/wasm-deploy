@@ -412,5 +412,5 @@ async function processTestScripts(
     }
   }
 
-  console.log(`All tests completed: ${totalTestSuites} test files executed, ${totalTests} test functions executed`);
+  console.log(`\n\nAll tests completed: ${totalTestSuites} test files executed, ${totalTests} test functions executed`);
 }

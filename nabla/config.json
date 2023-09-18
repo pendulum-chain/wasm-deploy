@@ -39,6 +39,10 @@
     "MockOracle": {
       "repository": "nablaContracts",
       "path": "contracts/src/mock/MockOracle.sol"
+    },
+    "VendingMachine": {
+      "repository": "nablaCurve",
+      "path": "test/util/VendingMachine.sol"
     }
   },
   "repositories": {
