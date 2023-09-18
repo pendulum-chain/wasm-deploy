@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName } from "./types";
 import { ChainApi } from "./api/api";
-import { StyledText } from "./helpers/terminal";
+import { StyledText } from "./utils/terminal";
 import { compileContract } from "./actions/compileContract";
 import { Project } from "./project";
 import {
@@ -67,7 +67,7 @@ function renderEvents(events: ContractEvent[]): StyledText[] {
   events.forEach(({ args, deployedContractId, eventIdentifier }) => {
     result.push([
       { text: "    🎉 Event " },
-      ...(deployedContractId !== undefined ? [{ text: deployedContractId, color: "blue" as "blue" }] : []),
+      ...(deployedContractId !== undefined ? [{ text: deployedContractId, color: "blue" as const }] : []),
       { text: "." },
       { text: eventIdentifier, color: "green" },
     ]);
@@ -100,7 +100,7 @@ function renderContractDeploymentStatus(
       color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
       spinning: state === "compiling" || state === "optimizing" || state === "deploying",
     },
-    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
+    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as const }] : []),
   ];
 
   return [firstLine, ...renderEvents(contractDeploymentStatus.events)];
@@ -123,7 +123,13 @@ function renderMethodExecutionStatus(
           { text: ` [` },
           ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
           ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
-            ? [{ text: ` gasTime: ${gasRequired.refTime.toHuman()} gasProof: ${gasRequired.proofSize.toHuman()}` }]
+            ? [
+                {
+                  text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
+                    gasRequired.proofSize.toHuman()
+                  )}`,
+                },
+              ]
             : []),
           { text: ` ]` },
         ]
@@ -181,6 +187,7 @@ export async function processScripts(
     }
   };
 
+  /* eslint-disable @typescript-eslint/require-await */
   const getDeployment = async (scriptName: ScriptName, deployedContractId: DeployedContractId): Promise<Deployment> => {
     const deployment = deployedContracts[deployedContractId];
     if (deployment !== undefined) {
@@ -188,6 +195,7 @@ export async function processScripts(
     }
     throw new Error(`Try to load unknown contract ${deployedContractId} in script ${scriptName}`);
   };
+  /* eslint-enable @typescript-eslint/require-await */
 
   const deploy = async (scriptName: ScriptName, deployedContractId: DeployedContractId, args: DeploymentArguments) => {
     const contractDeploymentStatus: ContractDeploymentStatus = {
@@ -271,7 +279,7 @@ export async function processScripts(
     deployedContractId: DeployedContractId,
     tx: TxOptions,
     functionName: string,
-    ...rest: any[]
+    ...rest: any[] /* eslint-disable-line @typescript-eslint/no-explicit-any */
   ) => {
     const contract = await getDeployment(scriptName, deployedContractId);
     const methodExecutionStatus: MethodExecutionStatus = {
@@ -325,6 +333,7 @@ export async function processScripts(
     const [scriptName, script] = scriptPair;
 
     const deploymentsForScript: DeploymentsExtension = {
+      /* eslint-disable-next-line @typescript-eslint/require-await */
       getOrNull: async (deployedContractId: DeployedContractId) => deployedContracts[deployedContractId] ?? null,
       get: getDeployment.bind(null, scriptName),
       deploy: deploy.bind(null, scriptName),
@@ -332,6 +341,7 @@ export async function processScripts(
     };
 
     const environmentForScript: WasmDeployEnvironment = {
+      /* eslint-disable @typescript-eslint/require-await */
       getNamedAccounts: async (): Promise<NamedAccounts> => namedAccounts,
       deployments: deploymentsForScript,
       network,

@@ -1,7 +1,6 @@
-import { Event } from "@polkadot/types/interfaces";
 import { Address } from "../types";
 import { KeyringPair } from "@polkadot/keyring/types";
-import { PromiseMutex } from "../helpers/promiseMutex";
+import { PromiseMutex } from "../utils/promiseMutex";
 import { ApiPromise } from "@polkadot/api";
 import { Extrinsic } from "@pendulum-chain/api-solang";
 

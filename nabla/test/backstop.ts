@@ -1,23 +1,21 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+
 import { TestContract, TestSuiteEnvironment } from "../../src/index";
-import { assertApproxEqAbs, assertApproxEqRel, assertEq, assertGt, assertLt } from "../../src/index";
+import { assertApproxEqAbs, assertApproxEqRel, assertEq, assertGt, assertLt, e } from "../../src/index";
 
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 const BOB = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
 
 export default async function (environment: TestSuiteEnvironment) {
-  let {
+  const {
     address,
     unit,
     milliUnit,
     microUnit,
-    stopPrank,
-    startPrank,
-    expectRevert,
-    expectEmit,
     getContractByAddress,
-    mintNative,
-    roll,
+    vm,
     tester,
     constructors: {
       newRouter,
@@ -51,7 +49,7 @@ export default async function (environment: TestSuiteEnvironment) {
   const oracle1 = await newMockOracle(address(asset1), unit(5));
   const oracle2 = await newMockOracle(address(asset2), unit(2));
 
-  const nablaCurve = await newNablaCurve(0, 10n ** 16n);
+  const nablaCurve = await newNablaCurve(0, e(0.01, 18));
   const MINT_AMOUNT = unit(100);
 
   const changePoolCoverageTo = async (pool: TestContract, targetCoverageRatio: bigint) => {
@@ -63,10 +61,10 @@ export default async function (environment: TestSuiteEnvironment) {
     if (targetReserves > reserves) {
       await poolAsset.mint(address(pool), targetReserves - reserves);
     } else {
-      startPrank(address(pool));
-      await mintNative(address(pool), unit(20));
+      vm.startPrank(address(pool));
+      await vm.mintNative(address(pool), unit(20));
       await poolAsset.transfer(tester, reserves - targetReserves);
-      stopPrank();
+      vm.stopPrank();
     }
   };
 
@@ -124,7 +122,7 @@ export default async function (environment: TestSuiteEnvironment) {
       await asset2.mint(tester, MINT_AMOUNT);
       await usd.mint(tester, MINT_AMOUNT);
 
-      startPrank(BOB);
+      vm.startPrank(BOB);
       await asset1.approve(address(swapPool1), MAX_UINT256);
       await asset2.approve(address(swapPool2), MAX_UINT256);
       await usd.approve(address(backstop), MAX_UINT256);
@@ -134,7 +132,7 @@ export default async function (environment: TestSuiteEnvironment) {
       await swapPool1.deposit(MINT_AMOUNT);
       await swapPool2.deposit(MINT_AMOUNT);
       await backstop.deposit(MINT_AMOUNT);
-      stopPrank();
+      vm.stopPrank();
 
       await router.swapExactTokensForTokens(
         unit(30),
@@ -146,7 +144,7 @@ export default async function (environment: TestSuiteEnvironment) {
     },
 
     async testPreventsDuplicateSwapPool() {
-      expectRevert("addSwapPool():DUPLICATE_SWAP_POOL");
+      vm.expectRevert("addSwapPool():DUPLICATE_SWAP_POOL");
       await backstop.addSwapPool(address(swapPool1), 0);
     },
 
@@ -178,25 +176,25 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.deposit(unit(1));
 
       // Expectation: Even tiny deposit fails, but cannot be minimally small or curve errors
-      expectRevert("deposit: CAP_EXCEEDED");
+      vm.expectRevert("deposit: CAP_EXCEEDED");
       await backstop.deposit(microUnit(100));
     },
 
     async testOnlyOwnerCanSetPoolCap() {
       await backstop.setPoolCap(unit(100));
 
-      startPrank(BOB);
-      expectRevert("Ownable: caller is not the owner");
+      vm.startPrank(BOB);
+      vm.expectRevert("Ownable: caller is not the owner");
       await backstop.setPoolCap(unit(100));
-      stopPrank();
+      vm.stopPrank();
     },
 
     async testBackstopDeposit() {
-      await changePoolCoverageTo(backstop, 10n ** 18n);
+      await changePoolCoverageTo(backstop, e(1, 18));
       const [reservesBefore, liabilitiesBefore] = await backstop.coverage();
       const [poolShares] = await backstop.simulateDeposit(unit(10));
 
-      expectEmit(backstop, "Mint", [tester, poolShares, unit(10)]);
+      vm.expectEmit(backstop, "Mint", [tester, poolShares, unit(10)]);
       const [lpTokens, fee] = await backstop.deposit(unit(10));
 
       const [reservesAfter, liabilitiesAfter] = await backstop.coverage();
@@ -217,9 +215,9 @@ export default async function (environment: TestSuiteEnvironment) {
       const [simulatedPayout] = await backstop.simulateWithdrawal((lpTokens * 3n) / 4n);
 
       const backstopAsset = getContractByAddress(await backstop.asset());
-      expectEmit(backstop, "Transfer", [tester, 0, (lpTokens * 3n) / 4n]);
-      expectEmit(backstopAsset, "Transfer", [address(backstop), tester, simulatedPayout]);
-      expectEmit(backstop, "Burn", [tester, (lpTokens * 3n) / 4n, simulatedPayout]);
+      vm.expectEmit(backstop, "Transfer", [tester, 0, (lpTokens * 3n) / 4n]);
+      vm.expectEmit(backstopAsset, "Transfer", [address(backstop), tester, simulatedPayout]);
+      vm.expectEmit(backstop, "Burn", [tester, (lpTokens * 3n) / 4n, simulatedPayout]);
 
       await backstop.withdraw((lpTokens * 3n) / 4n, unit(15));
       const [reservesAfter, liabilitiesAfter] = await backstop.coverage();
@@ -245,8 +243,8 @@ export default async function (environment: TestSuiteEnvironment) {
 
       const [lpTokens] = await pool.deposit(unit(10));
 
-      await roll(1001);
-      expectRevert("redeemSwapPoolShares():NO_COVER");
+      await vm.roll(1001);
+      vm.expectRevert("redeemSwapPoolShares():NO_COVER");
 
       // TODO: the original test uses address(swapPoolUsd) instead of address(pool)
       //   which is not what is intended in my opinion
@@ -255,9 +253,9 @@ export default async function (environment: TestSuiteEnvironment) {
 
     // this test is also failing in the original test suite, so we exclude it here
     async exclude_testBackstopLPWithdrawalWithPenalty() {
-      await changePoolCoverageTo(backstop, 10n ** 18n);
+      await changePoolCoverageTo(backstop, e(1, 18));
       await depositInto(backstop, unit(10));
-      await changePoolCoverageTo(backstop, 95n * 10n ** 16n);
+      await changePoolCoverageTo(backstop, e(0.95, 18));
 
       const [reservesBefore, liabilitiesBefore] = await backstop.coverage();
       const balanceBefore: bigint = await usd.balanceOf(tester);
@@ -281,7 +279,7 @@ export default async function (environment: TestSuiteEnvironment) {
       const [lpTokens] = await backstop.deposit(unit(20));
 
       console.log("lpTokens", lpTokens);
-      expectRevert("withdraw: INSUFFICIENT_BALANCE");
+      vm.expectRevert("withdraw: INSUFFICIENT_BALANCE");
       await backstop.withdraw(lpTokens + 1n, unit(19));
     },
 
@@ -295,40 +293,41 @@ export default async function (environment: TestSuiteEnvironment) {
       const [, swapLiabBefore] = await swapPool1.coverage();
 
       // Check WithdrawSwapLiquidity event
-      expectEmit(backstop, "WithdrawSwapLiquidity", [tester, address(swapPool1), 2000000000028n, 10000000000142n]);
-
-      const amountWithdrawn = await backstop.withdrawExcessSwapLiquidity(
+      vm.expectEmit(backstop, "WithdrawSwapLiquidity", [
+        tester,
         address(swapPool1),
-        lpTokens / 2n,
-        milliUnit(1950)
-      );
+        unit("2.000000000028515715"),
+        unit("10.000000000142578577"),
+      ]);
+
+      const amountWithdrawn = await backstop.withdrawExcessSwapLiquidity(address(swapPool1), lpTokens / 2n, unit(1.95));
 
       const [, backstopLiabAfter] = await backstop.coverage();
       const [, swapLiabAfter] = await swapPool1.coverage();
 
-      assertApproxEqRel(amountWithdrawn, unit(2), 10n ** 16n);
-      assertApproxEqRel(await asset1.balanceOf(tester), balanceBefore + amountWithdrawn, 1n ** 16n);
+      assertApproxEqRel(amountWithdrawn, unit(2), e(0.01, 18));
+      assertApproxEqRel(await asset1.balanceOf(tester), balanceBefore + amountWithdrawn, e(0.01, 18));
       assertEq(backstop.balanceOf(tester), lpTokens / 2n);
       assertEq(swapPool1.balanceOf(tester), 0);
 
-      assertApproxEqRel(backstopLiabAfter, backstopLiabBefore - unit(10), 10n ** 16n);
+      assertApproxEqRel(backstopLiabAfter, backstopLiabBefore - unit(10), e(0.01, 18));
       assertEq(swapLiabAfter, swapLiabBefore);
       assertEq(await usd.balanceOf(address(backstop)), backstopReservesBefore);
     },
 
     async testBackstopWithdrawalInExcessSwapLiquidityOnly() {
       await depositInto(backstop, unit(20));
-      await changePoolCoverageTo(swapPool1, 99999n * 10n ** 13n);
+      await changePoolCoverageTo(swapPool1, e(0.99999, 18));
       const lpTokens = await backstop.balanceOf(tester);
 
-      expectRevert("SwapPool#backstopDrain: COVERAGE_RATIO");
-      await backstop.withdrawExcessSwapLiquidity(address(swapPool1), lpTokens / 2n, milliUnit(1950));
+      vm.expectRevert("SwapPool#backstopDrain: COVERAGE_RATIO");
+      await backstop.withdrawExcessSwapLiquidity(address(swapPool1), lpTokens / 2n, unit(1.95));
     },
 
     async testSwapPoolBackstopWithdrawal() {
-      await changePoolCoverageTo(swapPool2, 10n ** 18n);
+      await changePoolCoverageTo(swapPool2, e(1, 18));
       await depositInto(swapPool2, unit(20));
-      await changePoolCoverageTo(swapPool2, 8n * 10n ** 17n);
+      await changePoolCoverageTo(swapPool2, e(0.8, 18));
       await backstop.setInsuranceFee(address(swapPool2), 100); // 1%
 
       const balanceBefore = await usd.balanceOf(tester);
@@ -337,10 +336,10 @@ export default async function (environment: TestSuiteEnvironment) {
       const [backstopReservesBefore, backstopLiabBefore] = await backstop.coverage();
       const [swapReservesBefore, swapLiabBefore] = await swapPool2.coverage();
 
-      await roll(1001);
+      await vm.roll(1001);
 
       // Check CoverSwapWithdrawal event
-      expectEmit(backstop, "CoverSwapWithdrawal", [
+      vm.expectEmit(backstop, "CoverSwapWithdrawal", [
         tester,
         address(swapPool2),
         lpTokens / 4n,
@@ -359,7 +358,7 @@ export default async function (environment: TestSuiteEnvironment) {
 
       // Known issue with tests: Use higher tolerance as changePoolCoverageTo() is flawed
       // (changePoolCoverageTo() only manipulates a pool's reserves without updating accumulatedSlippage)
-      assertApproxEqRel(paidOut, (((unit(20) * 2n) / 4n) * 99n) / 100n, milliUnit(1200), "unexpected payout amount");
+      assertApproxEqRel(paidOut, (((unit(20) * 2n) / 4n) * 99n) / 100n, unit(1.2), "unexpected payout amount");
 
       assertApproxEq(await usd.balanceOf(tester), balanceBefore + paidOut, "reported payout mismatch");
       assertApproxEq(await swapPool2.balanceOf(tester), (lpTokens * 3n) / 4n, "unexpected no. of shares left");
@@ -378,18 +377,45 @@ export default async function (environment: TestSuiteEnvironment) {
     async testSwapPoolBackstopWithdrawalLowCoverageOnly() {
       await depositInto(swapPool1, unit(20));
       await depositInto(swapPool2, unit(20));
-      await changePoolCoverageTo(swapPool1, 10n ** 18n);
-      await changePoolCoverageTo(swapPool2, 15n * 10n ** 17n);
+      await changePoolCoverageTo(swapPool1, e(1, 18));
+      await changePoolCoverageTo(swapPool2, e(1.5, 18));
       const lpTokens1 = await swapPool1.balanceOf(tester);
       const lpTokens2 = await swapPool2.balanceOf(tester);
 
-      await roll(1001);
+      await vm.roll(1001);
 
-      expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
+      vm.expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
       await backstop.redeemSwapPoolShares(address(swapPool1), lpTokens1 / 4n, 0);
 
-      expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
+      vm.expectRevert("redeemSwapPoolShares():SWAP_COVERAGE");
       await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens2 / 4n, 0);
+    },
+
+    // ! SKIPPED !
+    async skipTestSwapPoolBackstopWithdrawalTimeLock() {
+      await depositInto(swapPool1, unit(10));
+      await changePoolCoverageTo(swapPool1, e(0.7, 18));
+      const lpTokens = await swapPool2.balanceOf(tester);
+
+      vm.expectRevert("SwapPool#backstopBurn: TIMELOCK");
+      await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens / 4n, 0);
+
+      await vm.roll(1000);
+
+      vm.expectRevert("SwapPool#backstopBurn: TIMELOCK");
+      await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens / 4n, 0);
+    },
+
+    async testPreventsPausedSwapPoolBackstopWithdrawal() {
+      await depositInto(swapPool2, unit(20));
+      await changePoolCoverageTo(swapPool2, e(0.8, 18));
+      await vm.roll(1001);
+      await swapPool2.pause();
+
+      const shares = await swapPool2.balanceOf(tester);
+
+      vm.expectRevert("Pausable: paused");
+      await backstop.redeemSwapPoolShares(address(swapPool2), shares, unit(20) * 2n);
     },
   };
 }

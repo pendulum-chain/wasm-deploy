@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import { Address, ArgumentType, ContractSourcecodeId } from "../types";
 import { ChainApi, connectToChain } from "../api/api";
 import { Project, initializeProject } from "../project";
-import { StyledText, createAnimatedTextContext } from "../helpers/terminal";
+import { StyledText, createAnimatedTextContext } from "../utils/terminal";
 import { compileContract } from "../actions/compileContract";
-import { toUnit } from "../helpers/rationals";
+import { toUnit } from "../utils/rationals";
 import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitter";
 import { PanicCode } from "@pendulum-chain/api-solang";
+import { Codec } from "@polkadot/types-codec/types";
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -64,24 +65,31 @@ export class AssertionError extends Error {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type TestContract = Record<string, (...args: any[]) => Promise<any>> & {
   __internal: { deploymentAddress: Address };
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type TestConstructor = (...args: any[]) => Promise<TestContract>;
 
-export type TestSuiteEnvironment = {
-  address: (contract: TestContract) => string;
-  unit: (number: number | string | bigint, precision?: number) => bigint;
-  milliUnit: (number: number | string | bigint, precision?: number) => bigint;
-  microUnit: (number: number | string | bigint, precision?: number) => bigint;
+export interface CheatCodeInstance {
   startPrank: (prankster: Address) => void;
   stopPrank: () => void;
   expectRevert: (message: string) => void;
   expectEmit: (contract: TestContract, eventIdentifier: string, args: unknown[]) => void;
-  getContractByAddress: (deploymentAddress: Address | Uint8Array) => TestContract;
   mintNative: (account: Address, amount: bigint) => Promise<void>;
   roll: (noOfBlocks: bigint | number) => Promise<void>;
+  getBlockNumber: () => Promise<bigint>;
+}
+
+export type TestSuiteEnvironment = {
+  vm: CheatCodeInstance;
+  address: (contract: TestContract) => string;
+  unit: (number: number | string | bigint) => bigint;
+  milliUnit: (number: number | string | bigint) => bigint;
+  microUnit: (number: number | string | bigint) => bigint;
+  getContractByAddress: (deploymentAddress: Address | Uint8Array) => TestContract;
   tester: Address;
   constructors: Record<string, TestConstructor>;
 };
@@ -103,6 +111,7 @@ export interface ExpectedEmit {
   encoding: Buffer;
 }
 
+/* eslint-disable  */
 function processValue(value: any): any {
   if (value?.toRawType == undefined) {
     return undefined;
@@ -112,6 +121,8 @@ function processValue(value: any): any {
     case "u256":
     case "i256":
       return value.toBigInt();
+    case "bool":
+      return value.toPrimitive();
   }
 
   if (Array.isArray(value)) {
@@ -120,6 +131,7 @@ function processValue(value: any): any {
 
   return value;
 }
+/* eslint-enable */
 
 async function processTestScripts(
   project: Project,
@@ -136,7 +148,11 @@ async function processTestScripts(
   let expectedRevertMessage: string | undefined = undefined;
   let expectedEmits: ExpectedEmit[] = [];
 
+  let totalTests = 0;
+  let totalTestSuites = 0;
+
   for (const testSuitePair of testSuites) {
+    totalTestSuites++;
     const [testSuiteName, testSuite] = testSuitePair;
 
     const newContract = async (
@@ -192,7 +208,8 @@ async function processTestScripts(
 
       const deployedContract = { __internal: { deploymentAddress } } as TestContract;
       chainApi.getContractMessages(contractSourcecodeId).forEach((messageName) => {
-        deployedContract[messageName] = async (...args: any[]) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        deployedContract[messageName] = async (...args: any[]): Promise<unknown> => {
           console.log("Call contract", contractSourcecodeId, "at address", deploymentAddress, messageName, args);
 
           const { result, execution } = await chainApi.messageCall({
@@ -203,11 +220,12 @@ async function processTestScripts(
             submitter: deployerAccount ?? tester,
           });
 
-          let resultValue: any = undefined;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let resultValue: Codec | undefined = undefined;
 
           switch (result.type) {
             case "success":
-              resultValue = result.value;
+              resultValue = result.value as Codec;
               if (expectedRevertMessage !== undefined) {
                 throw new Error(
                   `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
@@ -253,7 +271,7 @@ async function processTestScripts(
           }
 
           console.log("Done", contractSourcecodeId, messageName, resultValue?.toHuman());
-          return processValue(resultValue);
+          return processValue(resultValue) as unknown;
         };
       });
 
@@ -324,18 +342,25 @@ async function processTestScripts(
       await chainApi.skipBlocks(noOfBlocks, root);
     };
 
+    const getBlockNumber = async (): Promise<bigint> => {
+      return chainApi.getBlockNumber();
+    };
+
     const environmentForTestSuite: TestSuiteEnvironment = {
       address,
       unit: toUnit.bind(null, units.unit),
       milliUnit: toUnit.bind(null, units.milliUnit),
       microUnit: toUnit.bind(null, units.microUnit),
-      startPrank,
-      stopPrank,
-      expectRevert,
-      expectEmit,
       getContractByAddress,
-      mintNative,
-      roll,
+      vm: {
+        startPrank,
+        stopPrank,
+        expectRevert,
+        expectEmit,
+        mintNative,
+        roll,
+        getBlockNumber,
+      },
       tester: getSubmitterAddress(tester),
       constructors: {},
     };
@@ -349,10 +374,12 @@ async function processTestScripts(
     const tests = Object.keys(testSuiteInstance).filter((key) => key.startsWith("test") && key !== "setUp");
 
     for (const test of tests) {
+      totalTests++;
       console.log(`\n\nRun test ${test}`);
       testSuiteInstance = await testSuite.default(environmentForTestSuite);
+
       try {
-        expectedRevertMessage = undefined;
+        expectedRevertMessage = undefined as undefined | string;
         if (testSuiteInstance.setUp !== undefined) {
           console.log(`Run setup code ${test}`);
           await testSuiteInstance.setUp();
@@ -365,21 +392,25 @@ async function processTestScripts(
             `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
           );
         }
-      } catch (error: any) {
+      } catch (error: any /* eslint-disable-line @typescript-eslint/no-explicit-any */) {
         stopPrank(false);
         expectedEmits = [];
 
-        if (error.name === "RevertError") {
+        if ((error as RevertError).name === "RevertError") {
           const revertMessage = (error as RevertError).message;
+          let message: string;
           if (expectedRevertMessage === undefined) {
-            error.message = `Test unexpectedly reverted with message "${revertMessage}".`;
+            message = `Test unexpectedly reverted with message "${revertMessage}".`;
           } else {
-            error.message = `Test was expected to revert with message "${expectedRevertMessage}" but reverted with message "${revertMessage}"`;
+            message = `Test was expected to revert with message "${expectedRevertMessage}" but reverted with message "${revertMessage}"`;
           }
+          (error as RevertError).message = message;
         }
 
         throw error;
       }
     }
   }
+
+  console.log(`All tests completed: ${totalTestSuites} test files executed, ${totalTests} test functions executed`);
 }

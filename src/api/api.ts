@@ -1,11 +1,9 @@
 import { WsProvider, ApiPromise, Keyring } from "@polkadot/api";
 import { u8aConcat } from "@polkadot/util";
-import { WeightV2 } from "@polkadot/types/interfaces";
-import { AnyJson } from "@polkadot/types-codec/types";
 import { Abi } from "@polkadot/api-contract";
 
 import { Address } from "../types";
-import { computeQuotient } from "../helpers/rationals";
+import { computeQuotient } from "../utils/rationals";
 import { Project } from "../project";
 import {
   SigningSubmitter,
@@ -170,7 +168,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       if (contractMetadataPool[contractMetadataId] !== undefined) {
         return;
       }
-      const metadata = JSON.parse(metadataString);
+      const metadata = JSON.parse(metadataString) as Record<string, unknown>;
       contractMetadataPool[contractMetadataId] = new Abi(metadata, api.registry.getChainProperties());
     },
 
@@ -181,6 +179,12 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       }
 
       return contractMetadata.messages.map((message) => message.identifier);
+    },
+
+    async getBlockNumber(): Promise<bigint> {
+      const block = await api.rpc.chain.getBlock();
+      const skippedBlocks = await api.query.contracts.skippedBlocks();
+      return BigInt(skippedBlocks.toPrimitive() as number) + block.block.header.number.toBigInt();
     },
 
     encodeContractEvent(deploymentAddress: Address, eventIdentifier: string, args: unknown[]): Uint8Array {

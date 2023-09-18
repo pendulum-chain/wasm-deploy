@@ -87,7 +87,7 @@ export async function createAnimatedTextContext(
   let spinningIndex: number = 0;
 
   if (process.stdout.isTTY) {
-    inputReader = require("readline").createInterface({
+    inputReader = readline.createInterface({
       input: process.stdin,
       output: undefined,
       terminal: true,

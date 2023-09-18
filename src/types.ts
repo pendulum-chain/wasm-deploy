@@ -1,5 +1,3 @@
-import { SigningSubmitter } from "./api/submitter";
-
 export type DeployedContractId = string;
 export type ContractSourcecodeId = string;
 export type NamedAccountId = string;

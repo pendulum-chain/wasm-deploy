@@ -106,7 +106,7 @@ const validateConfigFile = object(
 );
 
 export function parseConfigFile(configFileContent: string) {
-  const parsedConfiguration = JSON.parse(configFileContent);
+  const parsedConfiguration: unknown = JSON.parse(configFileContent);
 
   const validatedConfiguration = validateConfigFile(parsedConfiguration);
 

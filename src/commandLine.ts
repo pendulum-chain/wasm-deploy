@@ -15,8 +15,8 @@ export function parseCommandLine() {
     .command("pull")
     .description("Pull the latest version of the smart contracts from the upstream git repositories")
     .argument("<project>", "project folder")
-    .action((str, _options) => {
-      pull({ projectFolder: str });
+    .action(async (str, _options: Record<string, string>) => {
+      await pull({ projectFolder: str as string });
     });
 
   program
@@ -24,8 +24,8 @@ export function parseCommandLine() {
     .description("Run the project's deployment scripts")
     .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
-    .action(async (str, options) => {
-      deploy({ projectFolder: str, network: options.network });
+    .action(async (str, options: Record<string, string>) => {
+      await deploy({ projectFolder: str as string, network: options.network });
     });
 
   program
@@ -33,8 +33,8 @@ export function parseCommandLine() {
     .description("Run the test suite defined in a project")
     .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
-    .action(async (str, options) => {
-      runTestSuits({ projectFolder: str, network: options.network });
+    .action(async (str, options: Record<string, string>) => {
+      await runTestSuits({ projectFolder: str as string, network: options.network });
     });
 
   program.parse();

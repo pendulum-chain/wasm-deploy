@@ -15,8 +15,8 @@ import {
   RepositoryConfig,
   TestSuiteConfig,
 } from "./parseConfig";
-import { rawAddressesAreEqual } from "./helpers/addresses";
-import { PromiseMutex } from "./helpers/promiseMutex";
+import { rawAddressesAreEqual } from "./utils/addresses";
+import { PromiseMutex } from "./utils/promiseMutex";
 import { TestSuite } from "./commands/test";
 import { DeployScript } from "./commands/deploy";
 import { SigningSubmitter } from "./api/submitter";
@@ -83,10 +83,10 @@ export async function initializeProject(relativeProjectPath: string, configFileN
         `Named account ${namedAccountId} is not defined in the network definition for network ${networkName}`
       );
 
-    const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig!.address;
-    let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig!.suri;
+    const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig.address;
+    let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig.suri;
     if (suri === undefined) {
-      while (true) {
+      while (true /* eslint-disable-line no-constant-condition */) {
         const rl = readline.createInterface({ input, output });
         suri = (
           await rl.question(`Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `)
@@ -182,13 +182,13 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       const entries = await readdir(deployScriptsPath, { recursive: true, withFileTypes: true });
       const fileNames = entries
         .filter((entry) => entry.isFile())
-        .map((entry) => entry.name as ScriptName)
+        .map((entry) => entry.name)
         .filter((fileName) => fileName !== configFileName);
 
       const scripts: [ScriptName, DeployScript][] = await Promise.all(
         fileNames.map(async (file) => {
           const path = join(deployScriptsPath, file);
-          const imports: DeployScript = await import(path);
+          const imports = (await import(path)) as DeployScript;
           return [file, imports];
         })
       );
@@ -205,7 +205,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       const testSuites: [string, TestSuite][] = await Promise.all(
         fileNames.map(async (file) => {
           const path = join(testsPath, file);
-          const imports: TestSuite = await import(path);
+          const imports = (await import(path)) as TestSuite;
           return [file, imports];
         })
       );
@@ -231,7 +231,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       const signingSubmitters: Record<string, SigningSubmitter> = {};
       const networkConfig = getNetworkDefinition(networkName);
 
-      for (const namedAccountId of Object.keys(networkConfig.namedAccounts) as NamedAccountId[]) {
+      for (const namedAccountId of Object.keys(networkConfig.namedAccounts)) {
         signingSubmitters[namedAccountId] = await getSigningSubmitter(networkName, namedAccountId, keyring);
       }
 

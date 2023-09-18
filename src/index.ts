@@ -11,4 +11,4 @@ async function main() {
   parseCommandLine();
 }
 
-main();
+main().catch((error) => console.log(error));

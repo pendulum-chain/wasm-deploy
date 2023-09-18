@@ -2,7 +2,7 @@ import { join, basename } from "node:path";
 import { readFile, writeFile, rename } from "node:fs/promises";
 import blake2b from "blake2b";
 
-import { runCommand } from "../helpers/childProcess";
+import { runCommand } from "../utils/childProcess";
 import { ContractSourcecodeId } from "../types";
 import { ContractDeploymentState } from "../processScripts";
 import { Project } from "../project";
@@ -26,6 +26,13 @@ export async function compileContract(
   }
 
   return uploadedCodePromise;
+}
+
+export interface MetadataFile {
+  source?: {
+    hash?: string;
+    wasm?: string;
+  };
 }
 
 async function actuallyCompileContract(
@@ -93,7 +100,10 @@ async function actuallyCompileContract(
   const codeHexHash = Array.from(codeHash).reduce((acc, byte) => acc + byte.toString(16).padStart(2, "0"), "0x");
 
   const metadataFile = await readFile(metadataFileName);
-  const metadata = JSON.parse(metadataFile.toString("utf8"));
+  const metadata = JSON.parse(metadataFile.toString("utf8")) as MetadataFile;
+  if (metadata.source === undefined) {
+    metadata.source = {};
+  }
   metadata.source.hash = codeHexHash;
   metadata.source.wasm = hexContract;
   await writeFile(metadataFileName, JSON.stringify(metadata, null, 2));

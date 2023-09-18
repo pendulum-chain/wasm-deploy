@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 
 import { initializeProject } from "../project";
-import { runCommand } from "../helpers/childProcess";
+import { runCommand } from "../utils/childProcess";
 
 export interface PullOptions {
   projectFolder: string;

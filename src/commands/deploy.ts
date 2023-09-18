@@ -1,6 +1,6 @@
 import { Address, ArgumentType, ContractSourcecodeId, DeployedContractId, NamedAccount, NamedAccounts } from "../types";
 import { connectToChain } from "../api/api";
-import { createAnimatedTextContext } from "../helpers/terminal";
+import { createAnimatedTextContext } from "../utils/terminal";
 import { processScripts } from "../processScripts";
 import { initializeProject } from "../project";
 

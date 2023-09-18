@@ -1,5 +1,4 @@
 import Keyring from "@polkadot/keyring";
-import { ChainApi } from "../api/api";
 
 export function rawAddressesAreEqual(address1: Uint8Array, address2: Uint8Array): boolean {
   if (address1.byteLength !== address2.byteLength) {
