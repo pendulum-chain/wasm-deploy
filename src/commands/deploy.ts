@@ -25,6 +25,8 @@ export interface DeploymentArguments {
   args: ArgumentType[];
   log?: boolean;
   constructorName?: string;
+  allowReuse?: boolean;
+  preDeployedAddress?: string;
 }
 
 export interface DeploymentsExtension {

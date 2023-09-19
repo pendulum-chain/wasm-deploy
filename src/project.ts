@@ -202,6 +202,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     isContractPrecompiled(contractId: ContractSourcecodeId): boolean {
+
       const contractConfiguration = getContractConfiguration(contractId);
       return contractConfiguration.isPrecompiled === true;
     },

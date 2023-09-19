@@ -50,7 +50,10 @@
       "git": "https://github.com/0xamberhq/contracts.git",
       "branch": "feature/backstop-pool-coverage-ratio",
       "init": "yarn",
-      "importpaths": ["contracts/@chain/pendulum", "node_modules"]
+      "importpaths": [
+        "contracts/@chain/pendulum",
+        "node_modules"
+      ]
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
