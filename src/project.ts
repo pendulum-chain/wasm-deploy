@@ -21,6 +21,8 @@ import { TestSuite } from "./commands/test";
 import { DeployScript } from "./commands/deploy";
 import { SigningSubmitter } from "./api/submitter";
 
+import * as prompts from "prompts";
+
 export type RepositoryInitialization = "npm" | "yarn";
 
 export type Project = ReturnType<typeof initializeProject> extends Promise<infer T> ? T : never;
@@ -95,11 +97,24 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig.suri;
     if (suri === undefined) {
       while (true /* eslint-disable-line no-constant-condition */) {
-        const rl = readline.createInterface({ input, output });
-        suri = (
-          await rl.question(`Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `)
-        ).trim();
-        rl.close();
+        try {
+          suri = await prompts.prompts.password({
+            type: 'password',
+            name: 'value',
+            message: `Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `,
+          });
+
+
+        } catch (error) {
+          // Graceful exit here
+          process.exit();
+        }
+
+
+        if (suri === undefined) {
+          console.log(`Invalid suri for address ${accountId}`);
+          continue
+        }
 
         const keyRingPair = keyring.addFromUri(suri);
         const publicKey = keyring.addFromAddress(accountId);
