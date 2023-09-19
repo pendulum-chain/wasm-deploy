@@ -1,7 +1,7 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
 import { readFile } from "node:fs/promises";
 
-import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName } from "./types";
+import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName, ArgumentType } from "./types";
 import { ChainApi } from "./api/api";
 import { StyledText } from "./utils/terminal";
 import { compileContract } from "./actions/compileContract";
@@ -17,6 +17,8 @@ import {
 } from "./commands/deploy";
 import { SigningSubmitter, getSubmitterAddress } from "./api/submitter";
 import { DecodedContractEvent } from "@pendulum-chain/api-solang";
+import { ContractDeploymentInfo, saveDeploymentsInfo, readPreviousDeploymentsInfo, getInstanceKey } from "./utils/sessionDeployments";
+
 
 export type ContractDeploymentState =
   | "pending"
@@ -26,7 +28,8 @@ export type ContractDeploymentState =
   | "optimized"
   | "deploying"
   | "deployed"
-  | "failure";
+  | "failure"
+  | "reusing";
 
 interface ContractEvent extends DecodedContractEvent {
   deployedContractId: DeployedContractId | undefined;
@@ -54,6 +57,8 @@ interface MethodExecutionStatus {
   transactionResult?: string;
   failure?: string;
 }
+
+
 
 const SHOW_ESTIMATED_GAS = true;
 
@@ -97,7 +102,7 @@ function renderContractDeploymentStatus(
     ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
     {
       text: ` ${failure ?? state}`,
-      color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
+      color: state === "deployed" || state === "reusing" ? "green" : state === "failure" ? "red" : "yellow",
       spinning: state === "compiling" || state === "optimizing" || state === "deploying",
     },
     ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as const }] : []),
@@ -120,19 +125,19 @@ function renderMethodExecutionStatus(
     { text: functionName, color: "green" },
     ...(transactionFee !== undefined || (gasRequired !== undefined && SHOW_ESTIMATED_GAS)
       ? [
-          { text: ` [` },
-          ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
-          ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
-            ? [
-                {
-                  text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
-                    gasRequired.proofSize.toHuman()
-                  )}`,
-                },
-              ]
-            : []),
-          { text: ` ]` },
-        ]
+        { text: ` [` },
+        ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
+        ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
+          ? [
+            {
+              text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
+                gasRequired.proofSize.toHuman()
+              )}`,
+            },
+          ]
+          : []),
+        { text: ` ]` },
+      ]
       : []),
     {
       text: ` ${failure ?? state}`,
@@ -144,6 +149,8 @@ function renderMethodExecutionStatus(
 
   return [firstLine, ...renderEvents(methodExecutionStatus.events)];
 }
+
+
 
 export async function processScripts(
   scripts: [ScriptName, DeployScript][],
@@ -157,6 +164,7 @@ export async function processScripts(
   let executionStatuses: ExecutionStatus[] = [];
   const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
+  const deployedContractsInfoSession: Record<DeployedContractId, ContractDeploymentInfo> = {};
   const submittersByAddress: Record<Address, SigningSubmitter> = {};
   const namedAccounts: NamedAccounts = {};
 
@@ -165,6 +173,9 @@ export async function processScripts(
     namedAccounts[namedAccountId] = { accountId: submitterAddress };
     submittersByAddress[submitterAddress] = signingSubmitter;
   });
+
+  const previousDeployments: Record<string, ContractDeploymentInfo> = readPreviousDeploymentsInfo('deployments.json');
+
 
   const updateDisplayedStatus = (asStaticText: boolean = false) => {
     const styledTexts = executionStatuses
@@ -198,6 +209,7 @@ export async function processScripts(
   /* eslint-enable @typescript-eslint/require-await */
 
   const deploy = async (scriptName: ScriptName, deployedContractId: DeployedContractId, args: DeploymentArguments) => {
+
     const contractDeploymentStatus: ContractDeploymentStatus = {
       deployedContractId,
       contractFileId: args.contract,
@@ -221,6 +233,39 @@ export async function processScripts(
     );
     const compiledContractFile = await readFile(compiledContractFileName);
     chainApi.registerMetadata(args.contract, compiledContractFile.toString("utf8"));
+
+
+    //check if pre-deployed address was given 
+    if (args.preDeployedAddress) {
+
+      const deployment: Deployment = {
+        address: args.preDeployedAddress,
+        compiledContractFileName,
+      };
+      contractDeploymentStatus.address = args.preDeployedAddress;
+
+      updateContractStatus("reusing");
+
+      deployedContracts[deployedContractId] = deployment;
+
+      return deployment;
+    }
+
+    //check reuse flag, and existing deployments or address passed
+    const deploymentKey = getInstanceKey(deployedContractId, args.args);
+    if (args.allowReuse && previousDeployments[deploymentKey]) {
+      let previousDeployment = previousDeployments[deploymentKey];
+
+      contractDeploymentStatus.address = previousDeployment.address;
+
+      updateContractStatus("reusing");
+
+      deployedContracts[deployedContractId] = previousDeployment;
+      deployedContractsInfoSession[deployedContractId] = { ...previousDeployment, deployedArgs: args.args };
+
+      return previousDeployment;
+
+    }
 
     const result = await chainApi.deployContract({
       constructorArguments: args.args,
@@ -271,6 +316,7 @@ export async function processScripts(
     updateContractStatus("deployed");
 
     deployedContracts[deployedContractId] = deployment;
+    deployedContractsInfoSession[deployedContractId] = { ...deployment, deployedArgs: args.args };
     return deployment;
   };
 
@@ -357,4 +403,7 @@ export async function processScripts(
     updateDisplayedStatus(true);
     executionStatuses = [];
   }
+
+  //write deployed contracts info for alternative reuse later
+  await saveDeploymentsInfo("deployments.json", deployedContractsInfoSession);
 }
