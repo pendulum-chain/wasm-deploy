@@ -45,8 +45,14 @@ export function readPreviousDeploymentsInfo(file: string): Record<string, Contra
         const dataBuffer = fs.readFileSync(file);
         const dataJson = dataBuffer.toString();
         previousDeployments = JSON.parse(dataJson, valueParser);
-    } catch (error) {
-        throw Error("could not read previous deployments")
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            // File does not exist, return an empty object
+            return {};
+        } else {
+            // File exists but some other error occurred
+            throw new Error("Could not read previous deployments");
+        }
     }
 
     return previousDeployments;
