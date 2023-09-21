@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { deploy } from "./commands/deploy";
 import { pull } from "./commands/pull";
 import { runTestSuits } from "./commands/test";
+import { initializeProject } from "./commands/init";
 
 export function parseCommandLine() {
   const program = new Command();
@@ -35,6 +36,14 @@ export function parseCommandLine() {
     .requiredOption("-n, --network <name>", "the network name of the project")
     .action(async (str, options: Record<string, string>) => {
       await runTestSuits({ projectFolder: str as string, network: options.network });
+    });
+
+  program
+    .command("init")
+    .description("Create the boilerplate for a new project to be used with the cli")
+    .argument("<project>", "project name")
+    .action(async (str, _options: Record<string, string>) => {
+      await initializeProject({ projectName: str as string });
     });
 
   program.parse();

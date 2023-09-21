@@ -2,13 +2,14 @@ import { readFile } from "node:fs/promises";
 
 import { Address, ArgumentType, ContractSourcecodeId } from "../types";
 import { ChainApi, connectToChain } from "../api/api";
-import { Project, initializeProject } from "../project";
+import { Project, initializeProject, isTypescript } from "../project";
 import { StyledText, createAnimatedTextContext } from "../utils/terminal";
 import { compileContract } from "../actions/compileContract";
 import { toUnit } from "../utils/rationals";
 import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitter";
 import { PanicCode } from "@pendulum-chain/api-solang";
 import { Codec } from "@polkadot/types-codec/types";
+import { compileInPlace } from "../actions/compileScripts";
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -16,6 +17,12 @@ export interface RunTestSuitesOptions {
 }
 
 export async function runTestSuits(options: RunTestSuitesOptions) {
+
+  //compile tests scripts if we are NOT in typescript 
+  if (!isTypescript()) {
+    compileInPlace(options.projectFolder);
+  }
+
   const project = await initializeProject(options.projectFolder);
 
   const networkName = options.network;

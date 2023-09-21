@@ -27,6 +27,23 @@ export type RepositoryInitialization = "npm" | "yarn";
 
 export type Project = ReturnType<typeof initializeProject> extends Promise<infer T> ? T : never;
 
+import * as path from "path";
+
+export function isTypescript(): boolean {
+  const extension = path.extname(__filename);
+  if (extension === ".ts") {
+    return true;
+  }
+
+  const lastArg = process.execArgv[process.execArgv.length - 1];
+  if (lastArg && path.parse(lastArg).name.indexOf("ts-node") > 0) {
+    return true;
+  }
+  return false;
+
+}
+
+
 export async function initializeProject(relativeProjectPath: string, configFileName: string = "config.json") {
   console.log(`Load project in folder "${relativeProjectPath}"`);
 
@@ -207,11 +224,13 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     async readDeploymentScripts(): Promise<[ScriptName, DeployScript][]> {
+
+      const fileExtension = isTypescript() ? ".ts" : ".js";
       const entries = await readdir(deployScriptsPath, { recursive: true, withFileTypes: true });
       const fileNames = entries
         .filter((entry) => entry.isFile())
         .map((entry) => entry.name)
-        .filter((fileName) => fileName !== configFileName);
+        .filter((fileName) => fileName.endsWith(fileExtension) && fileName !== configFileName);
 
       const scripts: [ScriptName, DeployScript][] = await Promise.all(
         fileNames.map(async (file) => {
@@ -227,8 +246,9 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     async readTests(): Promise<{ testSuitConfig: TestSuiteConfig; testSuites: [ScriptName, TestSuite][] }> {
+      const fileExtension = isTypescript() ? ".ts" : ".js";
       const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
-      const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+      const fileNames = entries.filter((entry) => entry.name.endsWith(fileExtension) && entry.isFile()).map((entry) => entry.name);
 
       const testSuites: [string, TestSuite][] = await Promise.all(
         fileNames.map(async (file) => {

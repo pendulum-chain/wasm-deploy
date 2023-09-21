@@ -2,7 +2,8 @@ import { Address, ArgumentType, ContractSourcecodeId, DeployedContractId, NamedA
 import { connectToChain } from "../api/api";
 import { createAnimatedTextContext } from "../utils/terminal";
 import { processScripts } from "../processScripts";
-import { initializeProject } from "../project";
+import { initializeProject, isTypescript } from "../project";
+import { compileInPlace } from "../actions/compileScripts";
 
 export interface DeployOptions {
   projectFolder: string;
@@ -55,6 +56,12 @@ export interface DeployScript {
 }
 
 export async function deploy(options: DeployOptions) {
+
+  //compile deploy scripts if we are NOT in typescript 
+  if (!isTypescript()) {
+    compileInPlace(options.projectFolder);
+  }
+
   const project = await initializeProject(options.projectFolder);
 
   const networkName = options.network;
