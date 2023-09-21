@@ -17,6 +17,11 @@ Usage:
 
 Alternatively you can use the parameter `local` instead of `foucoco`. This expects that there is a local chain running on port `9944` – this is particularly useful to run together with the [foucoco-standalone](https://github.com/pendulum-chain/foucoco-standalone) node.
 
+### Running with typescript
+Alternatively, clone this repo and run the following commands:
+
+```npx ts-node src/cli.ts <command> <project-name> ...```
+
 # Required
 
 ```

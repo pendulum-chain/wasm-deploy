@@ -377,7 +377,22 @@ async function processTestScripts(
     }
 
     addStaticText([[{ text: "Process test suite " }, { text: testSuiteName, color: "cyan" }]], false);
-    let testSuiteInstance = await testSuite.default(environmentForTestSuite);
+
+    let testSuiteInstance: any;
+    try {
+      testSuiteInstance = await testSuite.default(environmentForTestSuite);
+    } catch (error) {
+      if (error instanceof TypeError && /is not a function/.test(error.message)) {
+
+        let attemptedContractInstance = error.message.split(" ")[0].replace("new", "").trim();
+
+        throw Error(`Contract ${attemptedContractInstance} does not exist in project nabla, please add it in the config.json file`)
+      } else {
+        throw error;
+      }
+
+    }
+
     const tests = Object.keys(testSuiteInstance).filter((key) => key.startsWith("test") && key !== "setUp");
 
     for (const test of tests) {

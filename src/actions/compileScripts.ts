@@ -11,12 +11,7 @@ export function compileInPlace(baseProjectDir: string): void {
 
     //Move the compiled files to the project dir
     for (const dir of folders) {
-        try {
-            moveCompiledFiles(path.join(distDir, dir), path.join(`./${baseProjectDir}`, dir));
-        } catch {
-
-        }
-
+        moveCompiledFiles(path.join(distDir, dir), path.join(`./${baseProjectDir}`, dir));
     }
 
     fs.rmdirSync(distDir, { recursive: true });
