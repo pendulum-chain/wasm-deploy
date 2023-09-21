@@ -2,13 +2,18 @@
   "name": "wasm-deploy",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "ts-node index.ts",
+    "build": "npx tsc",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "bin": {
+    "wasm-deploy": "./dist/cli.js"
+  },
   "devDependencies": {
     "@tsconfig/node16": "^1.0.4",
     "@types/blake2b": "^2.1.0",
