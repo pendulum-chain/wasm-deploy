@@ -42,8 +42,9 @@ export function parseCommandLine() {
     .command("init")
     .description("Create the boilerplate for a new project to be used with the cli")
     .argument("<project>", "project name")
-    .action(async (str, _options: Record<string, string>) => {
-      await initializeProject({ projectName: str as string });
+    .option('-e, --example <char>')
+    .action(async (str, options: Record<string, string>) => {
+      await initializeProject({ projectName: str as string, example: options.example });
     });
 
   program.parse();

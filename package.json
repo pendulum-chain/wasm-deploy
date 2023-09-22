@@ -6,6 +6,7 @@
   "scripts": {
     "start": "ts-node index.ts",
     "build": "npx tsc",
+    "postbuild": "node dist/projectTemplates/copySampleFiles.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [],

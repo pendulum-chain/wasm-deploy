@@ -69,6 +69,8 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
   const getGitCloneFolder = (contractId: ContractSourcecodeId): string => {
     const contractSource = getContractConfiguration(contractId);
+
+    //if repository undefined, aasume path in config starts from project root
     if (contractSource.repository === undefined) {
       return projectFolder;
     }

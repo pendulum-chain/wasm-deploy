@@ -1,6 +1,5 @@
-export const generateConfigJson = (): object => ({
-    "contracts": {
-    },
+export const generateConfigJson = (contracts: object): object => ({
+    contracts,
     "repositories": {
     },
     "networks": {

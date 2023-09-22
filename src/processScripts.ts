@@ -120,19 +120,19 @@ function renderMethodExecutionStatus(
     { text: functionName, color: "green" },
     ...(transactionFee !== undefined || (gasRequired !== undefined && SHOW_ESTIMATED_GAS)
       ? [
-          { text: ` [` },
-          ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
-          ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
-            ? [
-                {
-                  text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
-                    gasRequired.proofSize.toHuman()
-                  )}`,
-                },
-              ]
-            : []),
-          { text: ` ]` },
-        ]
+        { text: ` [` },
+        ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
+        ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
+          ? [
+            {
+              text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
+                gasRequired.proofSize.toHuman()
+              )}`,
+            },
+          ]
+          : []),
+        { text: ` ]` },
+      ]
       : []),
     {
       text: ` ${failure ?? state}`,
