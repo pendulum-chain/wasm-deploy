@@ -31,7 +31,7 @@ export const generateConfigJson = (contracts: object): object => ({
         "tester": "deployer",
         "root": "root"
     },
-    "buildFolder": "../target",
+    "buildFolder": "./target",
     "limits": {
         "gas": {
             "refTime": "100000000000",

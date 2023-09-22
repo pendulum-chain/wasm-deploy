@@ -12,6 +12,25 @@ export interface InitOptions {
 }
 
 export async function initializeProject({ projectName, example }: InitOptions): Promise<void> {
+
+    // Create and write tsconfig.json
+    let tsConfigPath = path.join(process.cwd(), 'tsconfig.json');
+    if (!fs.existsSync(tsConfigPath)) {
+        const tsConfigJson = generateTsConfig(distDir, projectName);
+        fs.writeFileSync(tsConfigPath, JSON.stringify(tsConfigJson, null, 2));
+    } else {
+        throw Error("tsconfig.json conflict, please ensure there is no project in directory")
+    }
+
+    // Create and write package.json
+    let packageConfigPath = path.join(process.cwd(), 'package.json');
+    if (!fs.existsSync(packageConfigPath)) {
+        const packageJson = generatePackageJson();
+        fs.writeFileSync(packageConfigPath, JSON.stringify(packageJson, null, 2));
+    } else {
+        throw Error("package.json conflict, please ensure there is no project in directory")
+    }
+
     // Create project directory
     const projectPath = path.join(process.cwd(), projectName);
     fs.mkdirSync(projectPath, { recursive: true });
@@ -27,26 +46,18 @@ export async function initializeProject({ projectName, example }: InitOptions): 
         contractObject = await populateExample(projectName, example);
     }
 
-    fs.mkdirSync(path.join(process.cwd(), 'target'));
+    fs.mkdirSync(path.join(process.cwd(), `./${projectName}/target`));
 
     // Create and write config.json
     const configJson = generateConfigJson(contractObject);
     fs.writeFileSync(path.join(projectPath, 'config.json'), JSON.stringify(configJson, null, 2));
 
-    // Create and write tsconfig.json
-    const tsConfigJson = generateTsConfig(distDir, projectName);
-
-    fs.writeFileSync(path.join(process.cwd(), 'tsconfig.json'), JSON.stringify(tsConfigJson, null, 2));
-
-    // Create and write package.json
-    const packageJson = generatePackageJson();
-    fs.writeFileSync(path.join(process.cwd(), 'package.json'), JSON.stringify(packageJson, null, 2));
 
 
 
     // Execute npm install in the project directory
-    execSync('npm install', { cwd: process.cwd() });
-    execSync('npm install --save-dev @types/node', { cwd: process.cwd() });
+    execSync('npm install', { cwd: process.cwd(), stdio: 'inherit' });
+    execSync('npm install --save-dev @types/node', { cwd: process.cwd(), stdio: 'inherit' });
 
 }
 

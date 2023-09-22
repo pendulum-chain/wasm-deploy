@@ -7,7 +7,7 @@ export const distDir = 'dist';
 
 export function compileInPlace(baseProjectDir: string): void {
 
-    execSync(`npm run build`);
+    execSync(`npm run build`, { cwd: process.cwd(), stdio: 'inherit' });
 
     //Move the compiled files to the project dir
     for (const dir of folders) {
