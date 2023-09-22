@@ -55,3 +55,20 @@ Example using a pre-compiled version of the contract, including the metadata:
     },
     ...
 ```
+
+Example using local contract:
+``` 
+"contracts": {
+    "MyContract": {
+      "path": "/local/path/to/myContract.sol",
+    },
+    ...
+```
+Keep in mind that if the contract has dependencies, they must also be locally available.
+
+# Example Project
+
+## ERC20
+Create a sample project with an ERC20 contract and tests:
+
+`wasm-deploy init sample -e erc20`

@@ -19,11 +19,11 @@ export async function initializeProject({ projectName, example }: InitOptions): 
     // Create subdirectories
     fs.mkdirSync(path.join(projectPath, 'deploy'));
     fs.mkdirSync(path.join(projectPath, 'test'));
-    fs.mkdirSync(path.join(projectPath, 'contracts'));
 
     //populate example files
     let contractObject = {};
     if (example) {
+        fs.mkdirSync(path.join(projectPath, 'contracts'));
         contractObject = await populateExample(projectName, example);
     }
 
@@ -53,6 +53,7 @@ export async function initializeProject({ projectName, example }: InitOptions): 
 async function populateExample(projectName: string, exampleName: string): Promise<object> {
 
     let rootDir = path.join(__dirname, '..');
+
 
     switch (exampleName) {
         case "erc20":
