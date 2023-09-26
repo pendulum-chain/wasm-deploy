@@ -1,4 +1,4 @@
-import { DeploymentsExtension, Network, TxOptions } from "../src/types";
+import { DeploymentsExtension, Network, TxOptions } from "../src/index";
 
 export function isTestnet(network: Network) {
   return ["foucoco", "local"].includes(network.name.toLowerCase());

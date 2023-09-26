@@ -1,25 +1,27 @@
 import { join, basename } from "node:path";
-import { readFile, writeFile, rename } from "node:fs/promises";
+import { readFile, writeFile, rename, copyFile } from "node:fs/promises";
 import blake2b from "blake2b";
 
-import { runCommand } from "../helpers/childProcess";
-import { DeploymentArguments } from "../types";
+import { runCommand } from "../utils/childProcess";
+import { ContractSourcecodeId } from "../types";
 import { ContractDeploymentState } from "../processScripts";
 import { Project } from "../project";
+import { getSolangPath } from "../utils/config";
+
 
 export async function compileContract(
-  args: DeploymentArguments,
+  contractId: ContractSourcecodeId,
   project: Project,
-  compiledContracts: Record<string, Promise<string>>,
+  compiledContracts: Record<ContractSourcecodeId, Promise<string>>,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
-  const { contract } = args;
-  const uploadedCodePromise = (await compiledContracts[contract])?.trim();
+  const uploadedCodePromise =
+    compiledContracts[contractId] !== undefined ? (await compiledContracts[contractId]).trim() : undefined;
 
   if (uploadedCodePromise === undefined) {
     let resolve: (value: string) => void;
-    compiledContracts[contract] = new Promise<string>((_resolve) => (resolve = _resolve));
-    const codeHash = await actuallyCompileContract(args, project, updateContractStatus);
+    compiledContracts[contractId] = new Promise<string>((_resolve) => (resolve = _resolve));
+    const codeHash = await actuallyCompileContract(contractId, project, updateContractStatus);
     resolve!(codeHash);
 
     return codeHash;
@@ -28,13 +30,18 @@ export async function compileContract(
   return uploadedCodePromise;
 }
 
+export interface MetadataFile {
+  source?: {
+    hash?: string;
+    wasm?: string;
+  };
+}
+
 async function actuallyCompileContract(
-  args: DeploymentArguments,
+  contractId: ContractSourcecodeId,
   project: Project,
   updateContractStatus: (status: ContractDeploymentState) => void
 ): Promise<string> {
-  const { contract: contractId } = args;
-
   const contractSourceName = project.getContractSourcePath(contractId);
   const builtFileName = join(project.getTempFolder(), basename(contractSourceName));
 
@@ -48,12 +55,18 @@ async function actuallyCompileContract(
   const importpaths = project.getImportPaths(contractId);
   const importmaps = project.getImportMaps(contractId);
 
+  if (project.isContractPrecompiled(contractId)) {
+    await copyFile(contractSourceName, metadataFileName);
+    return metadataFileName;
+  }
+
   updateContractStatus("compiling");
   const solangResult = await runCommand([
-    "solang",
+    getSolangPath(),
     "compile",
+    "--no-strength-reduce", // temporary fix for https://github.com/hyperledger/solang/issues/1507
     "--target",
-    "substrate",
+    "polkadot",
     "-O",
     "aggressive",
     "--release",
@@ -94,7 +107,10 @@ async function actuallyCompileContract(
   const codeHexHash = Array.from(codeHash).reduce((acc, byte) => acc + byte.toString(16).padStart(2, "0"), "0x");
 
   const metadataFile = await readFile(metadataFileName);
-  const metadata = JSON.parse(metadataFile.toString("utf8"));
+  const metadata = JSON.parse(metadataFile.toString("utf8")) as MetadataFile;
+  if (metadata.source === undefined) {
+    metadata.source = {};
+  }
   metadata.source.hash = codeHexHash;
   metadata.source.wasm = hexContract;
   await writeFile(metadataFileName, JSON.stringify(metadata, null, 2));

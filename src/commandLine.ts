@@ -1,6 +1,9 @@
 import { Command } from "commander";
 import { deploy } from "./commands/deploy";
 import { pull } from "./commands/pull";
+import { runTestSuits } from "./commands/test";
+import { initializeProject } from "./commands/init";
+import { setSolangPath } from "./utils/config";
 
 export function parseCommandLine() {
   const program = new Command();
@@ -13,18 +16,44 @@ export function parseCommandLine() {
   program
     .command("pull")
     .description("Pull the latest version of the smart contracts from the upstream git repositories")
-    .argument("<folder>", "project folder")
-    .action((str, _options) => {
-      pull({ projectFolder: str });
+    .argument("<project>", "project folder")
+    .action(async (str, _options: Record<string, string>) => {
+      await pull({ projectFolder: str as string });
     });
 
   program
     .command("deploy")
     .description("Run the project's deployment scripts")
-    .argument("<folder>", "project folder")
+    .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
-    .action(async (str, options) => {
-      deploy({ projectFolder: str, network: options.network });
+    .action(async (str, options: Record<string, string>) => {
+      await deploy({ projectFolder: str as string, network: options.network });
+    });
+
+  program
+    .command("test")
+    .description("Run the test suite defined in a project")
+    .argument("<project>", "project folder")
+    .requiredOption("-n, --network <name>", "the network name of the project")
+    .action(async (str, options: Record<string, string>) => {
+      await runTestSuits({ projectFolder: str as string, network: options.network });
+    });
+
+  program
+    .command("init")
+    .description("Create the boilerplate for a new project to be used with the cli")
+    .argument("<project>", "project name")
+    .option('-e, --example <char>')
+    .action(async (str, options: Record<string, string>) => {
+      await initializeProject({ projectName: str as string, example: options.example });
+    });
+
+  program
+    .command("set-solang")
+    .description("Set the path to the solang compiler")
+    .argument("<path>", "solang path")
+    .action(async (str) => {
+      setSolangPath(str);
     });
 
   program.parse();

@@ -2,19 +2,30 @@
   "name": "wasm-deploy",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "ts-node index.ts",
+    "build": "npx tsc",
+    "postbuild": "node dist/projectTemplates/copySampleFiles.js",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "bin": {
+    "wasm-deploy": "./dist/cli.js"
+  },
   "devDependencies": {
     "@tsconfig/node16": "^1.0.4",
     "@types/blake2b": "^2.1.0",
-    "@types/node": "^20.3.1"
+    "@types/node": "^20.3.1",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "eslint": "^8.49.0",
+    "typescript": "^5.2.2"
   },
   "dependencies": {
+    "@pendulum-chain/api-solang": "0.0.2",
     "@polkadot/api": "^10.9.1",
     "@polkadot/api-contract": "^10.9.1",
     "@polkadot/keyring": "^12.3.2",
@@ -22,9 +33,14 @@
     "@polkadot/types-codec": "^10.9.1",
     "@polkadot/util": "^12.3.2",
     "@polkadot/util-crypto": "^12.3.2",
+    "@types/prompts": "^2.4.4",
     "blake2b": "^2.1.4",
     "commander": "^11.0.0",
     "fefe": "^3.2.0",
+    "prompts": "^2.4.2",
     "ts-node": "^10.9.1"
-  }
+  },
+  "workspaces": [
+    "packages/api-solang"
+  ]
 }
