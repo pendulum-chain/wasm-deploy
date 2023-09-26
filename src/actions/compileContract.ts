@@ -6,6 +6,8 @@ import { runCommand } from "../utils/childProcess";
 import { ContractSourcecodeId } from "../types";
 import { ContractDeploymentState } from "../processScripts";
 import { Project } from "../project";
+import { getSolangPath } from "../utils/config";
+
 
 export async function compileContract(
   contractId: ContractSourcecodeId,
@@ -60,7 +62,7 @@ async function actuallyCompileContract(
 
   updateContractStatus("compiling");
   const solangResult = await runCommand([
-    "../clones/solang/target/release/solang",
+    getSolangPath(),
     "compile",
     "--no-strength-reduce", // temporary fix for https://github.com/hyperledger/solang/issues/1507
     "--target",

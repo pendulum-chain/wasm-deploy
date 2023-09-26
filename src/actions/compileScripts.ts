@@ -11,7 +11,10 @@ export function compileInPlace(baseProjectDir: string): void {
 
     //Move the compiled files to the project dir
     for (const dir of folders) {
+
         moveCompiledFiles(path.join(distDir, dir), path.join(`./${baseProjectDir}`, dir));
+
+
     }
 
     fs.rmdirSync(distDir, { recursive: true });
@@ -19,15 +22,19 @@ export function compileInPlace(baseProjectDir: string): void {
 
 
 function moveCompiledFiles(fromDir: string, toDir: string) {
-    const files = fs.readdirSync(fromDir);
+    if (fs.existsSync(fromDir)) {
+        const files = fs.readdirSync(fromDir);
 
-    for (const file of files) {
-        if (path.extname(file) === '.js') {
-            const from = path.join(fromDir, file);
-            const to = path.join(toDir, file);
-            fs.renameSync(from, to);
+        for (const file of files) {
+
+            if (path.extname(file) === '.js') {
+                const from = path.join(fromDir, file);
+                const to = path.join(toDir, file);
+                fs.renameSync(from, to);
+            }
         }
     }
+
 }
 
 

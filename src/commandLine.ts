@@ -3,6 +3,7 @@ import { deploy } from "./commands/deploy";
 import { pull } from "./commands/pull";
 import { runTestSuits } from "./commands/test";
 import { initializeProject } from "./commands/init";
+import { setSolangPath } from "./utils/config";
 
 export function parseCommandLine() {
   const program = new Command();
@@ -45,6 +46,14 @@ export function parseCommandLine() {
     .option('-e, --example <char>')
     .action(async (str, options: Record<string, string>) => {
       await initializeProject({ projectName: str as string, example: options.example });
+    });
+
+  program
+    .command("set-solang")
+    .description("Set the path to the solang compiler")
+    .argument("<path>", "solang path")
+    .action(async (str) => {
+      setSolangPath(str);
     });
 
   program.parse();

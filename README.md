@@ -27,7 +27,10 @@ Alternatively, clone this repo and run the following commands:
 ```
 brew install binaryen
 ```
+# Solang Compiler Config
+If contracts are not pre-compiled, solang is used to compile contracts and obtain the meta-data. 
 
+Run `wasm-deploy set-solang <path-to-solang>` to point to the local binary of the compiler. 
 
 # Project Config
 ## Contracts
