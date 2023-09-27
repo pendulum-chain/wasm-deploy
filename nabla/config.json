@@ -1,5 +1,8 @@
 {
   "contracts": {
+    "TestableERC20Wrapper": {
+      "path": "contracts/TestableERC20Wrapper.sol"
+    },
     "Router": {
       "repository": "nablaContracts",
       "path": "contracts/src/core/Router.sol"
@@ -50,7 +53,10 @@
       "git": "https://github.com/0xamberhq/contracts.git",
       "branch": "feature/backstop-pool-coverage-ratio",
       "init": "yarn",
-      "importpaths": ["contracts/@chain/pendulum", "node_modules"]
+      "importpaths": [
+        "contracts/@chain/pendulum",
+        "node_modules"
+      ]
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
@@ -89,8 +95,8 @@
   "buildFolder": "../target",
   "limits": {
     "gas": {
-      "refTime": "100000000000",
-      "proofSize": "10000000"
+      "refTime": "10000000000000000",
+      "proofSize": "10000000000000000"
     },
     "storageDeposit": "10000000000000"
   }

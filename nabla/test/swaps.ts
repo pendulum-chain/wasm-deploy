@@ -24,7 +24,7 @@ export default async function (environment: TestSuiteEnvironment) {
     getContractByAddress,
     vm,
     tester,
-    constructors: { newRouter, newMockERC20, newSwapPool, newMockOracle, newNablaCurve },
+    constructors: { newRouter, newMockERC20, newTestableERC20Wrapper, newSwapPool, newMockOracle, newNablaCurve },
   } = environment;
 
   function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {
@@ -94,8 +94,12 @@ export default async function (environment: TestSuiteEnvironment) {
   const router = await newRouter();
   const treasury = FERDIE;
 
-  const asset1 = await newMockERC20("Test Token 1", "TEST1");
-  const asset2 = await newMockERC20("Test Token 2", "TEST2");
+  //const asset1 = await newMockERC20("Test Token 1", "TEST1");
+  //const asset2 = await newMockERC20("Test Token 2", "TEST2");
+
+  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 18, [1], [2], [], []);
+  const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);
+
   const oracle1 = await newMockOracle(address(asset1), unit(1));
   const oracle2 = await newMockOracle(address(asset2), unit(2));
 
@@ -132,8 +136,18 @@ export default async function (environment: TestSuiteEnvironment) {
       await router.registerPool(address(asset1), address(swapPool1));
       await router.registerPool(address(asset2), address(swapPool2));
 
+      await asset1.burn(tester, await asset1.balanceOf(tester));
       await asset1.mint(tester, MINT_AMOUNT);
+
+      await asset2.burn(tester, await asset2.balanceOf(tester));
       await asset2.mint(tester, MINT_AMOUNT);
+
+      await asset1.burn(treasury, await asset1.balanceOf(treasury));
+      await asset2.burn(treasury, await asset2.balanceOf(treasury));
+
+      await asset1.burn(address(swapPool1), await asset1.balanceOf(address(swapPool1)));
+
+
     },
 
     async testSwap() {
