@@ -46,7 +46,7 @@ export default async function (environment: TestSuiteEnvironment) {
   };
 
   const nablaCurve = await newNablaCurve(0, e(0.01, 18));
-  //const asset = await newMockERC20("Test Token", "TEST");
+
   const asset = await newTestableERC20Wrapper("Test Token", "TEST", 18, [1], [1], [], []);
   const pool = await newTestableSwapPool(address(asset), address(nablaCurve), 0, 0, 0, "Test LP Token", "LP");
 

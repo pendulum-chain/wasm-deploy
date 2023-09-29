@@ -42,11 +42,6 @@ export default async function (environment: TestSuiteEnvironment) {
   let swapPool1: TestContract;
   let swapPool2: TestContract;
 
-  //const asset1 = await newMockERC20("Test Token 1", "TEST1");
-  //const asset2 = await newMockERC20("Test Token 2", "TEST2");
-  //const usd = await newMockERC20("Test Backstop Token", "USD");
-
-  //WE MUST ENSURE THAT INITIAL SUPPLY IS 0
   const usd = await newTestableERC20Wrapper("Test Backstop Token", "USD", 18, [1], [1], [], []);
   const asset1 = await newTestableERC20Wrapper("TestNative", "TEST1", 18, [1], [2], [], []);
   const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);

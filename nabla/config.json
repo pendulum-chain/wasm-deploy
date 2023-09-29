@@ -1,7 +1,7 @@
 {
   "contracts": {
     "TestableERC20Wrapper": {
-      "path": "contracts/TestableERC20Wrapper.sol"
+      "path": "testable-erc20-wrapper/TestableERC20Wrapper.sol"
     },
     "Router": {
       "repository": "nablaContracts",
