@@ -1,6 +1,7 @@
 {
   "contracts": {
     "TestableERC20Wrapper": {
+      "repository": "pendulumWrappers",
       "path": "testable-erc20-wrapper/TestableERC20Wrapper.sol"
     },
     "Router": {
@@ -60,7 +61,7 @@
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
-      "branch": "32-support-latest-solang-version"
+      "branch": "master"
     }
   },
   "networks": {
