@@ -43,7 +43,7 @@ export default async function (environment: TestSuiteEnvironment) {
   let swapPool2: TestContract;
 
   const usd = await newTestableERC20Wrapper("Test Backstop Token", "USD", 18, [1], [1], [], []);
-  const asset1 = await newTestableERC20Wrapper("TestNative", "TEST1", 18, [1], [2], [], []);
+  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 18, [1], [2], [], []);
   const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);
 
 
@@ -120,7 +120,12 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.addSwapPool(address(swapPool1), 0);
       await backstop.addSwapPool(address(swapPool2), 0);
 
+      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //burning pre-existing balances.
 
+      //This is required since the assets are on the standalone testing 
+      //chain and we cannot ensure in the test alone that the balances
+      //of these tokens is indeed 0 (a test could have run earlier) 
       await asset1.burn(tester, await asset1.balanceOf(tester));
       await asset1.mint(tester, MINT_AMOUNT);
 

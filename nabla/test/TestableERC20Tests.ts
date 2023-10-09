@@ -22,21 +22,13 @@ export default async function (environment: TestSuiteEnvironment) {
         },
     } = environment;
 
-    function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {
-        if (a !== 0n && b !== 0n) {
-            assertApproxEqRel(a, b, 5n * 10n ** 15n, errorMessage);
-        } else {
-            assertApproxEqAbs(a, b, milliUnit(5), errorMessage);
-        }
-    }
-
     let router: TestContract;
     let backstop: TestContract;
     let swapPool1: TestContract;
     let swapPool2: TestContract;
 
-    const asset1 = await newTestableERC20Wrapper("TestNative", "TEST1", 12, [0], [0], [], []);
-    const asset2 = await newTestableERC20Wrapper("TestNonNative", "TEST2", 12, [1], [1], [], []);
+    const assetNative = await newTestableERC20Wrapper("TestNative", "TEST1", 12, [0], [0], [], []);
+    const token1 = await newTestableERC20Wrapper("TestNonNative", "TEST2", 12, [1], [1], [], []);
 
 
     const MINT_AMOUNT = unit(10000);
@@ -48,38 +40,38 @@ export default async function (environment: TestSuiteEnvironment) {
 
         },
         async testMintsNative() {
-            let totalSupplyBef = await asset1.totalSupply();
-            await asset1.mint(BOB, MINT_AMOUNT);
-            let totalSupplyAft = await asset1.totalSupply();
+            let totalSupplyBef = await assetNative.totalSupply();
+            await assetNative.mint(BOB, MINT_AMOUNT);
+            let totalSupplyAft = await assetNative.totalSupply();
 
             assertEq(totalSupplyAft - totalSupplyBef, MINT_AMOUNT);
         },
 
         async testMintsTokensPallet() {
-            let totalSupplyBef = await asset2.totalSupply();
-            let balanceBobBef = await asset2.balanceOf(BOB);
+            let totalSupplyBef = await token1.totalSupply();
+            let balanceBobBef = await token1.balanceOf(BOB);
 
-            await asset2.mint(BOB, MINT_AMOUNT);
+            await token1.mint(BOB, MINT_AMOUNT);
 
-            let totalSupplyAft = await asset2.totalSupply();
-            let balanceBob = await asset2.balanceOf(BOB);
+            let totalSupplyAft = await token1.totalSupply();
+            let balanceBob = await token1.balanceOf(BOB);
 
             assertEq(totalSupplyAft - totalSupplyBef, MINT_AMOUNT);
             assertEq(balanceBob - balanceBobBef, MINT_AMOUNT);
         },
 
         async testBurnsNative() {
-            let totalSupplyBef = await asset1.totalSupply();
-            await asset1.burn(BOB, BURN_AMOUNT);
-            let totalSupplyAft = await asset1.totalSupply();
+            let totalSupplyBef = await assetNative.totalSupply();
+            await assetNative.burn(BOB, BURN_AMOUNT);
+            let totalSupplyAft = await assetNative.totalSupply();
 
             assertEq(totalSupplyBef - totalSupplyAft, BURN_AMOUNT);
         },
 
         async testBurnsToken() {
-            let totalSupplyBef = await asset2.totalSupply();
-            await asset2.burn(BOB, BURN_AMOUNT);
-            let totalSupplyAft = await asset2.totalSupply();
+            let totalSupplyBef = await token1.totalSupply();
+            await token1.burn(BOB, BURN_AMOUNT);
+            let totalSupplyAft = await token1.totalSupply();
 
             assertEq(totalSupplyBef - totalSupplyAft, BURN_AMOUNT);
         },
