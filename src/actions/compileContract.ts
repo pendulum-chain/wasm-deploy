@@ -60,7 +60,7 @@ async function actuallyCompileContract(
 
   updateContractStatus("compiling");
   const solangResult = await runCommand([
-    "/home/giannipop/root/pendulum/solang/target/release/solang",
+    "../clones/solang/target/release/solang",
     "compile",
     "--no-strength-reduce", // temporary fix for https://github.com/hyperledger/solang/issues/1507
     "--target",

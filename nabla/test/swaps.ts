@@ -124,7 +124,12 @@ export default async function (environment: TestSuiteEnvironment) {
   return {
     async setUp() {
 
-      //cleaning mock tokens in standalone chain
+      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //burning pre-existing balances.
+
+      //This is required since the assets are on the standalone testing 
+      //chain and we cannot ensure in the test alone that the balances
+      //of these tokens is indeed 0 (a test could have run earlier) 
       await asset1.burn(tester, await asset1.balanceOf(tester));
       await asset2.burn(tester, await asset2.balanceOf(tester));
 

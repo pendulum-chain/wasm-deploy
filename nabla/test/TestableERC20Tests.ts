@@ -30,10 +30,8 @@ export default async function (environment: TestSuiteEnvironment) {
     const assetNative = await newTestableERC20Wrapper("TestNative", "TEST1", 12, [0], [0], [], []);
     const token1 = await newTestableERC20Wrapper("TestNonNative", "TEST2", 12, [1], [1], [], []);
 
-
     const MINT_AMOUNT = unit(10000);
     const BURN_AMOUNT = unit(10);
-
 
     return {
         async setUp() {
@@ -75,8 +73,5 @@ export default async function (environment: TestSuiteEnvironment) {
 
             assertEq(totalSupplyBef - totalSupplyAft, BURN_AMOUNT);
         },
-
-
-
     };
 }

@@ -59,6 +59,13 @@ export default async function (environment: TestSuiteEnvironment) {
 
       // Important to deposit something before tests start, as first deposit
       // does not invoke usual _sharesToMint() logic, due to total supply being 0
+
+      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //burning pre-existing balances.
+
+      //This is required since the assets are on the standalone testing 
+      //chain and we cannot ensure in the test alone that the balances
+      //of these tokens is indeed 0 (a test could have run earlier) 
       await asset.burn(CHARLIE, await asset.balanceOf(CHARLIE));
       await asset.mint(CHARLIE, unit(1));
 
