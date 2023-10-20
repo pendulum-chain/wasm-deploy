@@ -24,8 +24,10 @@ export default async function (environment: TestSuiteEnvironment) {
     getContractByAddress,
     vm,
     tester,
-    constructors: { newRouter, newMockERC20, newSwapPool, newMockOracle, newNablaCurve },
+    constructors: { newRouter, newMockERC20, newTestableERC20Wrapper, newSwapPool, newMockOracle, newNablaCurve },
   } = environment;
+
+  const deadlineTime = Math.floor((Date.now() / 1000) + 10);
 
   function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {
     if (a !== 0n && b !== 0n) {
@@ -72,7 +74,7 @@ export default async function (environment: TestSuiteEnvironment) {
       WITHDRAW_AMOUNT / 2n - LOW_SLIPPAGE,
       path,
       tester,
-      Math.floor(Date.now() / 1000)
+      deadlineTime
     );
 
     const balanceAfter = await asset2.balanceOf(tester);
@@ -94,8 +96,9 @@ export default async function (environment: TestSuiteEnvironment) {
   const router = await newRouter();
   const treasury = FERDIE;
 
-  const asset1 = await newMockERC20("Test Token 1", "TEST1");
-  const asset2 = await newMockERC20("Test Token 2", "TEST2");
+  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 18, [1], [2], [], []);
+  const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);
+
   const oracle1 = await newMockOracle(address(asset1), unit(1));
   const oracle2 = await newMockOracle(address(asset2), unit(2));
 
@@ -120,12 +123,33 @@ export default async function (environment: TestSuiteEnvironment) {
 
   return {
     async setUp() {
+
+      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //burning pre-existing balances.
+
+      //This is required since the assets are on the standalone testing 
+      //chain and we cannot ensure in the test alone that the balances
+      //of these tokens is indeed 0 (a test could have run earlier) 
+      await asset1.burn(tester, await asset1.balanceOf(tester));
+      await asset2.burn(tester, await asset2.balanceOf(tester));
+
+      await asset1.burn(treasury, await asset1.balanceOf(treasury));
+      await asset2.burn(treasury, await asset2.balanceOf(treasury));
+
+      await asset1.burn(address(swapPool1), await asset1.balanceOf(address(swapPool1)));
+      await asset1.burn(address(swapPool2), await asset1.balanceOf(address(swapPool2)));
+
+      await asset2.burn(address(swapPool1), await asset2.balanceOf(address(swapPool1)));
+      await asset2.burn(address(swapPool2), await asset2.balanceOf(address(swapPool2)));
+
+
       await asset1.approve(address(router), MAX_UINT256);
       await asset2.approve(address(router), MAX_UINT256);
 
       await asset1.approve(address(swapPool1), MAX_UINT256);
       await asset2.approve(address(swapPool2), MAX_UINT256);
 
+      //set up
       await router.setPriceOracle(address(asset1), address(oracle1));
       await router.setPriceOracle(address(asset2), address(oracle2));
 
@@ -134,6 +158,7 @@ export default async function (environment: TestSuiteEnvironment) {
 
       await asset1.mint(tester, MINT_AMOUNT);
       await asset2.mint(tester, MINT_AMOUNT);
+
     },
 
     async testSwap() {
@@ -166,11 +191,14 @@ export default async function (environment: TestSuiteEnvironment) {
         ((WITHDRAW_AMOUNT / 2n) * 98n) / 100n - LOW_SLIPPAGE,
         path,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
+
+
 
       const balanceAfter = await asset2.balanceOf(tester);
       const treasuryAfter = await asset2.balanceOf(treasury);
+
 
       const swapFees = quoteWithoutFee - quoteWithFee;
       const [, liabilitiesAfter] = await swapPool2.coverage();
@@ -228,7 +256,7 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(10) - HIGH_SLIPPAGE,
         path1,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
       const path2 = makePath(asset2, asset1);
@@ -237,7 +265,7 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(20) - HIGH_SLIPPAGE,
         path2,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
       const [finalReserves, finalLiabilities] = await swapPool1.coverage();
@@ -288,15 +316,17 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(10) - HIGH_SLIPPAGE,
         path1,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
       const initialBalance1 = await asset1.balanceOf(tester);
       const initialBalance2 = await asset2.balanceOf(tester);
 
+
       // Swap forward
       const [initialReserves, initialLiabilities] = await swapPool1.coverage();
       const [initialReserves2, initialLiabilities2] = await swapPool2.coverage();
+
 
       const path2 = makePath(asset1, asset2);
       const [, forwardSwapOutput] = await router.swapExactTokensForTokens(
@@ -304,20 +334,24 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(10) - HIGH_SLIPPAGE,
         path2,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
+
       const path3 = makePath(asset2, asset1);
+
       await router.swapExactTokensForTokens(
         forwardSwapOutput,
         unit(20) - HIGH_SLIPPAGE,
         path3,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
       const [finalReserves, finalLiabilities] = await swapPool1.coverage();
+
       const [finalReserves2, finalLiabilities2] = await swapPool2.coverage();
+
 
       assertEq(finalLiabilities, initialLiabilities, "Liabilities must eventually be equal to initial ones");
       assertEq(finalLiabilities2, initialLiabilities2, "Liabilities must eventually be equal to initial ones");
@@ -364,12 +398,14 @@ export default async function (environment: TestSuiteEnvironment) {
       assertTrue(await router.paused());
 
       vm.expectRevert("Pausable: paused");
+
+
       await router.swapExactTokensForTokens(
         WITHDRAW_AMOUNT,
         WITHDRAW_AMOUNT / 2n - LOW_SLIPPAGE,
         path,
         tester,
-        Math.floor(Date.now() / 1000)
+        deadlineTime
       );
 
       await router.unpause();
