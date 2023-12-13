@@ -283,8 +283,36 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.withdraw(lpTokens + 1n, unit(19));
     },
 
+    async testNejc() {
+      const backstop2 = await newTestableBackstopPool(
+        address(router),
+        address(usd),
+        address(nablaCurve),
+        "Test Backstop LP",
+        "BLP"
+      );
+
+      await usd.approve(address(backstop2), MAX_UINT256);
+
+      //await backstop2.addSwapPool(address(swapPool1), 0);
+      //await backstop2.addSwapPool(address(swapPool2), 0);
+
+      vm.startPrank(BOB);
+      await usd.approve(address(backstop2), MAX_UINT256);
+      await usd.mint(BOB, MINT_AMOUNT);
+      await backstop2.deposit(MINT_AMOUNT);
+      vm.stopPrank();
+
+      const amount = e(1, 12);
+      const result = await backstop2.deposit(amount);
+      console.log("result", result);
+
+      const result2 = await backstop2.withdraw(amount, (amount * 99n) / 100n);
+      console.log("result2", result2);
+    },
+
     // this test is also failing in the original test suite, so we exclude it here
-    async exclude_testBackstopLPWithdrawalInSwapLiquidity() {
+    async test_exclude_testBackstopLPWithdrawalInSwapLiquidity() {
       await depositInto(backstop, unit(20));
       const balanceBefore = await asset1.balanceOf(tester);
       const lpTokens = await backstop.balanceOf(tester);

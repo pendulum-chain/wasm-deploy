@@ -160,6 +160,7 @@ async function processTestScripts(
       constructorName: string,
       ...args: ArgumentType[]
     ): Promise<TestContract> => {
+      console.log("Deploying new contract", contractSourcecodeId);
       const updateContractStatus = () => undefined;
 
       const compiledContractFileName = await compileContract(

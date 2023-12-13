@@ -5,8 +5,8 @@
       "path": "contracts/src/core/Router.sol"
     },
     "NablaCurve": {
-      "repository": "nablaCurve",
-      "path": "src/NablaCurve.sol"
+      "path": "NablaCurve.contract",
+      "isPrecompiled": true
     },
     "BackstopPool": {
       "repository": "nablaContracts",
@@ -51,11 +51,6 @@
       "branch": "feature/backstop-pool-coverage-ratio",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
-    },
-    "nablaCurve": {
-      "git": "https://github.com/0xamberhq/curve.git",
-      "branch": "main",
-      "init": "yarn"
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
