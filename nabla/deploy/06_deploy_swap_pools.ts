@@ -1,5 +1,5 @@
-import { WasmDeployEnvironment } from "../src/index";
-import { registerSwapPool } from "./_lib";
+import { WasmDeployEnvironment } from "../../src/index";
+import { registerSwapPool } from "../_lib";
 
 async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();

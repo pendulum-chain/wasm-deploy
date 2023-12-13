@@ -1,29 +1,24 @@
 import { WeightV2 } from "@polkadot/types/interfaces";
 import { readFile } from "node:fs/promises";
 
+import { Address, ContractSourcecodeId, DeployedContractId, NamedAccounts, ScriptName, ArgumentType } from "./types";
+import { ChainApi } from "./api/api";
+import { StyledText } from "./utils/terminal";
+import { compileContract } from "./actions/compileContract";
+import { Project } from "./project";
 import {
-  Address,
-  ContractSourcecodeId,
   DeployScript,
-  DeployedContractId,
   Deployment,
   DeploymentArguments,
   DeploymentsExtension,
-  ExecuctionEvent,
-  NamedAccounts,
   Network,
-  ScriptName,
   TxOptions,
   WasmDeployEnvironment,
-} from "./types";
+} from "./commands/deploy";
+import { SigningSubmitter, getSubmitterAddress } from "./api/submitter";
+import { DecodedContractEvent } from "@pendulum-chain/api-solang";
+import { ContractDeploymentInfo, saveDeploymentsInfo, readPreviousDeploymentsInfo, getInstanceKey } from "./utils/sessionDeployments";
 
-import { ChainApi } from "./api";
-import { StyledText } from "./helpers/terminal";
-import { compileContract } from "./actions/compileContract";
-import { addressesAreEqual } from "./helpers/addresses";
-import { Abi } from "@polkadot/api-contract";
-import { DecodedEvent } from "@polkadot/api-contract/types";
-import { Project } from "./project";
 
 export type ContractDeploymentState =
   | "pending"
@@ -33,7 +28,12 @@ export type ContractDeploymentState =
   | "optimized"
   | "deploying"
   | "deployed"
-  | "failure";
+  | "failure"
+  | "reusing";
+
+interface ContractEvent extends DecodedContractEvent {
+  deployedContractId: DeployedContractId | undefined;
+}
 
 interface ContractDeploymentStatus {
   contractFileId: ContractSourcecodeId;
@@ -42,21 +42,23 @@ interface ContractDeploymentStatus {
   address?: Address;
   failure?: string;
   transactionFee?: bigint;
-  events: ExecuctionEvent[];
+  events: ContractEvent[];
 }
 
-export type MethodExecutionState = "pending" | "dry running" | "gas estimated" | "submitting" | "success" | "failure";
+export type MethodExecutionState = "pending" | "dry running" | "submitting" | "success" | "failure";
 
 interface MethodExecutionStatus {
   deployedContractId: DeployedContractId;
   functionName: string;
   state: MethodExecutionState;
-  events: ExecuctionEvent[];
+  events: ContractEvent[];
   gasRequired?: WeightV2;
   transactionFee?: bigint;
   transactionResult?: string;
   failure?: string;
 }
+
+
 
 const SHOW_ESTIMATED_GAS = true;
 
@@ -64,15 +66,15 @@ type ExecutionStatus =
   | { type: "contractDeployment"; status: ContractDeploymentStatus }
   | { type: "methodExecution"; status: MethodExecutionStatus };
 
-function renderEvents(events: ExecuctionEvent[]): StyledText[] {
+function renderEvents(events: ContractEvent[]): StyledText[] {
   const result: StyledText[] = [];
 
-  events.forEach(({ args, deployedContractId, identifier }) => {
+  events.forEach(({ args, deployedContractId, eventIdentifier }) => {
     result.push([
       { text: "    🎉 Event " },
-      { text: deployedContractId, color: "blue" },
+      ...(deployedContractId !== undefined ? [{ text: deployedContractId, color: "blue" as const }] : []),
       { text: "." },
-      { text: identifier, color: "green" },
+      { text: eventIdentifier, color: "green" },
     ]);
 
     args.forEach(({ name, value }) => {
@@ -90,7 +92,7 @@ function renderEvents(events: ExecuctionEvent[]): StyledText[] {
 
 function renderContractDeploymentStatus(
   contractDeploymentStatus: ContractDeploymentStatus,
-  chainApi: ChainApi
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>
 ): StyledText[] {
   const { contractFileId, deployedContractId, state, address, transactionFee, failure } = contractDeploymentStatus;
   const firstLine: StyledText = [
@@ -100,16 +102,19 @@ function renderContractDeploymentStatus(
     ...(transactionFee !== undefined ? [{ text: ` [fee: ${chainApi.getAmountString(transactionFee)}]` }] : []),
     {
       text: ` ${failure ?? state}`,
-      color: state === "deployed" ? "green" : state === "failure" ? "red" : "yellow",
+      color: state === "deployed" || state === "reusing" ? "green" : state === "failure" ? "red" : "yellow",
       spinning: state === "compiling" || state === "optimizing" || state === "deploying",
     },
-    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as "green" }] : []),
+    ...(address !== undefined ? [{ text: ` to ${address}`, color: "green" as const }] : []),
   ];
 
   return [firstLine, ...renderEvents(contractDeploymentStatus.events)];
 }
 
-function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatus, chainApi: ChainApi): StyledText[] {
+function renderMethodExecutionStatus(
+  methodExecutionStatus: MethodExecutionStatus,
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>
+): StyledText[] {
   const { deployedContractId, functionName, state, transactionResult, transactionFee, failure, gasRequired } =
     methodExecutionStatus;
 
@@ -120,13 +125,19 @@ function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatu
     { text: functionName, color: "green" },
     ...(transactionFee !== undefined || (gasRequired !== undefined && SHOW_ESTIMATED_GAS)
       ? [
-          { text: ` [` },
-          ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
-          ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
-            ? [{ text: ` gasTime: ${gasRequired.refTime.toHuman()} gasProof: ${gasRequired.proofSize.toHuman()}` }]
-            : []),
-          { text: ` ]` },
-        ]
+        { text: ` [` },
+        ...(transactionFee !== undefined ? [{ text: ` fee: ${chainApi.getAmountString(transactionFee)}` }] : []),
+        ...(gasRequired !== undefined && SHOW_ESTIMATED_GAS
+          ? [
+            {
+              text: ` gasTime: ${String(gasRequired.refTime.toHuman())} gasProof: ${String(
+                gasRequired.proofSize.toHuman()
+              )}`,
+            },
+          ]
+          : []),
+        { text: ` ]` },
+      ]
       : []),
     {
       text: ` ${failure ?? state}`,
@@ -139,35 +150,32 @@ function renderMethodExecutionStatus(methodExecutionStatus: MethodExecutionStatu
   return [firstLine, ...renderEvents(methodExecutionStatus.events)];
 }
 
+
+
 export async function processScripts(
   scripts: [ScriptName, DeployScript][],
-  getNamedAccounts: () => Promise<NamedAccounts>,
+  signingSubmitters: Record<string, SigningSubmitter>, //getNamedAccounts: () => Promise<NamedAccounts>,
   network: Network,
   project: Project,
-  chainApi: ChainApi,
+  chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>,
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ) {
   let executionStatuses: ExecutionStatus[] = [];
-  const compiledContracts: Record<DeployedContractId, Promise<string>> = {};
+  const compiledContracts: Record<ContractSourcecodeId, Promise<string>> = {};
   const deployedContracts: Record<DeployedContractId, Deployment> = {};
+  const deployedContractsInfoSession: Record<DeployedContractId, ContractDeploymentInfo> = {};
+  const submittersByAddress: Record<Address, SigningSubmitter> = {};
+  const namedAccounts: NamedAccounts = {};
 
-  const resolveContractEvent = (
-    contractAddress: string,
-    data: Buffer,
-    extra?: { id: string; address: string; abi: Abi }
-  ): [DeployedContractId, DecodedEvent] | undefined => {
-    if (extra !== undefined && addressesAreEqual(extra.address, contractAddress, chainApi)) {
-      return [extra.id, extra.abi.decodeEvent(data)];
-    }
+  Object.entries(signingSubmitters).forEach(([namedAccountId, signingSubmitter]) => {
+    const submitterAddress = getSubmitterAddress(signingSubmitter);
+    namedAccounts[namedAccountId] = { accountId: submitterAddress };
+    submittersByAddress[submitterAddress] = signingSubmitter;
+  });
 
-    for (const entry of Object.entries(deployedContracts)) {
-      const [deployedContractId, deployment] = entry;
-      if (addressesAreEqual(deployment.address, contractAddress, chainApi)) {
-        return [deployedContractId, deployment.abi.decodeEvent(data)];
-      }
-    }
-  };
+  const previousDeployments: Record<string, ContractDeploymentInfo> = readPreviousDeploymentsInfo('deployments.json');
+
 
   const updateDisplayedStatus = (asStaticText: boolean = false) => {
     const styledTexts = executionStatuses
@@ -190,6 +198,7 @@ export async function processScripts(
     }
   };
 
+  /* eslint-disable @typescript-eslint/require-await */
   const getDeployment = async (scriptName: ScriptName, deployedContractId: DeployedContractId): Promise<Deployment> => {
     const deployment = deployedContracts[deployedContractId];
     if (deployment !== undefined) {
@@ -197,8 +206,10 @@ export async function processScripts(
     }
     throw new Error(`Try to load unknown contract ${deployedContractId} in script ${scriptName}`);
   };
+  /* eslint-enable @typescript-eslint/require-await */
 
   const deploy = async (scriptName: ScriptName, deployedContractId: DeployedContractId, args: DeploymentArguments) => {
+
     const contractDeploymentStatus: ContractDeploymentStatus = {
       deployedContractId,
       contractFileId: args.contract,
@@ -214,45 +225,98 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const addEvent = (event: ExecuctionEvent) => {
-      contractDeploymentStatus.events.push(event);
-      updateDisplayedStatus();
-    };
-
-    const compiledContractFileName = await compileContract(args, project, compiledContracts, updateContractStatus);
-    const compiledContractFile = await readFile(compiledContractFileName);
-    const metadata = JSON.parse(compiledContractFile.toString("utf8"));
-    const abi = new Abi(metadata, chainApi.api().registry.getChainProperties());
-
-    const { result, transactionFee } = await chainApi.instantiateWithCode(
-      compiledContractFileName,
-      args,
+    const compiledContractFileName = await compileContract(
+      args.contract,
       project,
-      updateContractStatus,
-      resolveContractEvent,
-      addEvent,
-      abi,
-      deployedContractId
+      compiledContracts,
+      updateContractStatus
     );
+    const compiledContractFile = await readFile(compiledContractFileName);
+    chainApi.registerMetadata(args.contract, compiledContractFile.toString("utf8"));
 
-    contractDeploymentStatus.transactionFee = transactionFee;
-    if (result.type === "error") {
-      contractDeploymentStatus.failure = result.error;
-      updateContractStatus("failure");
 
-      throw new Error(`An error occurred deploying contract ${deployedContractId}`);
+    //check if pre-deployed address was given 
+    if (args.preDeployedAddress) {
+
+      const deployment: Deployment = {
+        address: args.preDeployedAddress,
+        compiledContractFileName,
+      };
+      contractDeploymentStatus.address = args.preDeployedAddress;
+
+      updateContractStatus("reusing");
+
+      deployedContracts[deployedContractId] = deployment;
+
+      return deployment;
     }
 
+    //check reuse flag, and existing deployments or address passed
+    const deploymentKey = getInstanceKey(deployedContractId, args.args);
+    if (args.allowReuse && previousDeployments[deploymentKey]) {
+      let previousDeployment = previousDeployments[deploymentKey];
+
+      contractDeploymentStatus.address = previousDeployment.address;
+
+      updateContractStatus("reusing");
+
+      deployedContracts[deployedContractId] = previousDeployment;
+      deployedContractsInfoSession[deployedContractId] = { ...previousDeployment, deployedArgs: args.args };
+
+      return previousDeployment;
+
+    }
+
+    const result = await chainApi.deployContract({
+      constructorArguments: args.args,
+      contractMetadataId: args.contract,
+      deployedContractId,
+      project,
+      submitter: submittersByAddress[args.from.accountId],
+      constructorName: args.constructorName,
+      onStartingDeployment: () => updateContractStatus("deploying"),
+    });
+
+    if (result.type === "success") {
+      result.events.forEach((event) => {
+        if (event.decoded !== undefined) {
+          contractDeploymentStatus.events.push({
+            ...event.decoded,
+            deployedContractId: chainApi.lookupIdOfDeployedContract(event.emittingContractAddress),
+          });
+        }
+      });
+    }
+
+    if (result.type !== "success") {
+      switch (result.type) {
+        case "error":
+          contractDeploymentStatus.failure = `Error: ${result.error}`;
+          break;
+        case "panic":
+          contractDeploymentStatus.failure = `Panic: ${result.explanation} (code: ${result.errorCode})`;
+          break;
+        case "reverted":
+          contractDeploymentStatus.failure = `Revert: ${result.description}`;
+          break;
+      }
+      updateContractStatus("failure");
+
+      throw new Error(`An error occurred deploying contract (${result.type}): ${deployedContractId}`);
+    }
+
+    const { transactionFee, deploymentAddress } = result;
+    contractDeploymentStatus.transactionFee = transactionFee;
+
     const deployment: Deployment = {
-      address: result.value,
+      address: deploymentAddress,
       compiledContractFileName,
-      metadata,
-      abi,
     };
-    contractDeploymentStatus.address = result.value;
+    contractDeploymentStatus.address = deploymentAddress;
     updateContractStatus("deployed");
 
     deployedContracts[deployedContractId] = deployment;
+    deployedContractsInfoSession[deployedContractId] = { ...deployment, deployedArgs: args.args };
     return deployment;
   };
 
@@ -261,7 +325,7 @@ export async function processScripts(
     deployedContractId: DeployedContractId,
     tx: TxOptions,
     functionName: string,
-    ...rest: any[]
+    ...rest: any[] /* eslint-disable-line @typescript-eslint/no-explicit-any */
   ) => {
     const contract = await getDeployment(scriptName, deployedContractId);
     const methodExecutionStatus: MethodExecutionStatus = {
@@ -282,23 +346,27 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const addEvent = (event: ExecuctionEvent) => {
-      methodExecutionStatus.events.push(event);
-      updateDisplayedStatus();
-    };
-
-    const { result, transactionFee } = await chainApi.executeContractFunction(
-      contract,
-      tx,
-      functionName,
+    const { result, execution } = await chainApi.messageCall({
+      deploymentAddress: contract.address,
+      messageArguments: rest,
+      messageName: functionName,
       project,
-      resolveContractEvent,
-      updateExecutionStatus,
-      addEvent,
-      ...rest
-    );
+      submitter: submittersByAddress[tx.from.accountId],
+      onReadyToSubmit: () => updateExecutionStatus("submitting"),
+    });
 
-    methodExecutionStatus.transactionFee = transactionFee;
+    if (execution.type === "extrinsic") {
+      methodExecutionStatus.transactionFee = execution.transactionFee;
+      execution.contractEvents.forEach((event) => {
+        if (event.decoded !== undefined) {
+          methodExecutionStatus.events.push({
+            ...event.decoded,
+            deployedContractId: chainApi.lookupIdOfDeployedContract(event.emittingContractAddress),
+          });
+        }
+      });
+    }
+
     if (result.type === "error") {
       methodExecutionStatus.failure = result.error;
       updateExecutionStatus("failure", undefined);
@@ -311,6 +379,7 @@ export async function processScripts(
     const [scriptName, script] = scriptPair;
 
     const deploymentsForScript: DeploymentsExtension = {
+      /* eslint-disable-next-line @typescript-eslint/require-await */
       getOrNull: async (deployedContractId: DeployedContractId) => deployedContracts[deployedContractId] ?? null,
       get: getDeployment.bind(null, scriptName),
       deploy: deploy.bind(null, scriptName),
@@ -318,7 +387,8 @@ export async function processScripts(
     };
 
     const environmentForScript: WasmDeployEnvironment = {
-      getNamedAccounts,
+      /* eslint-disable @typescript-eslint/require-await */
+      getNamedAccounts: async (): Promise<NamedAccounts> => namedAccounts,
       deployments: deploymentsForScript,
       network,
     };
@@ -333,4 +403,7 @@ export async function processScripts(
     updateDisplayedStatus(true);
     executionStatuses = [];
   }
+
+  //write deployed contracts info for alternative reuse later
+  await saveDeploymentsInfo("deployments.json", deployedContractsInfoSession);
 }

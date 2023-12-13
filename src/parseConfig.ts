@@ -1,5 +1,6 @@
 import {
   array,
+  boolean,
   enumerate,
   isFailure,
   isSuccess,
@@ -24,15 +25,16 @@ const validateImportMap = object(
 export type ContractConfiguration = ValidatorReturnType<typeof validateContractSourceReference>;
 const validateContractSourceReference = object(
   {
-    repository: string(),
+    repository: optional(string()),
     path: string(),
+    isPrecompiled: optional(boolean()),
     importpaths: optional(array(string())),
     importmaps: optional(array(validateImportMap)),
   },
   { allowExcessProperties: false }
 );
 
-export type NamedAccount = ValidatorReturnType<typeof validateNamedAccount>;
+export type NamedAccountConfig = ValidatorReturnType<typeof validateNamedAccount>;
 const validateNamedAccount = union(
   string(),
   object(
@@ -83,12 +85,22 @@ const validateRepositoryConfig = object(
 export type RepositoryConfigMap = ValidatorReturnType<typeof validateRepositoryConfigMap>;
 const validateRepositoryConfigMap = objectMap(validateRepositoryConfig);
 
+export type TestSuiteConfig = ValidatorReturnType<typeof validateTestSuiteConfig>;
+const validateTestSuiteConfig = object(
+  {
+    tester: string(),
+    root: string(),
+  },
+  { allowExcessProperties: false }
+);
+
 export type Configuration = ValidatorReturnType<typeof validateConfigFile>;
 const validateConfigFile = object(
   {
     contracts: objectMap(validateContractSourceReference),
     repositories: validateRepositoryConfigMap,
     networks: objectMap(validateNetworkConfig),
+    tests: optional(validateTestSuiteConfig),
     buildFolder: string(),
     limits: validateLimitsConfig,
   },
@@ -96,7 +108,7 @@ const validateConfigFile = object(
 );
 
 export function parseConfigFile(configFileContent: string) {
-  const parsedConfiguration = JSON.parse(configFileContent);
+  const parsedConfiguration: unknown = JSON.parse(configFileContent);
 
   const validatedConfiguration = validateConfigFile(parsedConfiguration);
 

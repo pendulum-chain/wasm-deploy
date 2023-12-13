@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 
 import { initializeProject } from "../project";
-import { runCommand } from "../helpers/childProcess";
+import { runCommand } from "../utils/childProcess";
 
 export interface PullOptions {
   projectFolder: string;
@@ -16,13 +16,22 @@ export async function pull({ projectFolder }: PullOptions) {
   for (const contractId of project.getContracts()) {
     const repository = project.getContractConfiguration(contractId).repository;
 
+    if (repository === undefined) {
+      continue;
+    }
+
     if (alreadyProcessed.has(repository)) {
       continue;
     }
     alreadyProcessed.add(repository);
 
     const gitClonePath = project.getGitCloneFolder(contractId);
-    const { branch, git, init } = project.getRepositoryConfig(contractId);
+    const repositoryConfig = project.getRepositoryConfig(contractId);
+    if (repositoryConfig === undefined) {
+      throw new Error(`Repository definition for contract "${contractId}" does not exist`);
+    }
+
+    const { branch, git, init } = repositoryConfig;
     console.log(`Clone git ${git} for branch ${branch}`);
 
     await rm(gitClonePath, { recursive: true, force: true });

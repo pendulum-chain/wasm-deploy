@@ -1,5 +1,5 @@
-import { WasmDeployEnvironment } from "../src/index";
-import { isTestnet, registerAsset } from "./_lib";
+import { WasmDeployEnvironment } from "../../src/index";
+import { isTestnet, registerAsset } from "../_lib";
 
 async function DeployMockOracles({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
