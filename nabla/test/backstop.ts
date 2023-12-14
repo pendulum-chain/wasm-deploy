@@ -21,6 +21,7 @@ export default async function (environment: TestSuiteEnvironment) {
       newRouter,
       newTestableBackstopPool,
       newMockERC20,
+      newTestableERC20Wrapper,
       newMockOracle,
       newNablaCurve,
       newTestableSwapPool,
@@ -41,9 +42,10 @@ export default async function (environment: TestSuiteEnvironment) {
   let swapPool1: TestContract;
   let swapPool2: TestContract;
 
-  const asset1 = await newMockERC20("Test Token 1", "TEST1");
-  const asset2 = await newMockERC20("Test Token 2", "TEST2");
-  const usd = await newMockERC20("Test Backstop Token", "USD");
+  const usd = await newTestableERC20Wrapper("Test Backstop Token", "USD", 18, [1], [1], [], []);
+  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 18, [1], [2], [], []);
+  const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);
+
 
   const oracleUsd = await newMockOracle(address(usd), unit(1));
   const oracle1 = await newMockOracle(address(asset1), unit(5));
@@ -118,17 +120,35 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.addSwapPool(address(swapPool1), 0);
       await backstop.addSwapPool(address(swapPool2), 0);
 
+      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //burning pre-existing balances.
+
+      //This is required since the assets are on the standalone testing 
+      //chain and we cannot ensure in the test alone that the balances
+      //of these tokens is indeed 0 (a test could have run earlier) 
+      await asset1.burn(tester, await asset1.balanceOf(tester));
       await asset1.mint(tester, MINT_AMOUNT);
+
+      await asset2.burn(tester, await asset2.balanceOf(tester));
       await asset2.mint(tester, MINT_AMOUNT);
+
+      await usd.burn(tester, await usd.balanceOf(tester));
       await usd.mint(tester, MINT_AMOUNT);
 
       vm.startPrank(BOB);
       await asset1.approve(address(swapPool1), MAX_UINT256);
       await asset2.approve(address(swapPool2), MAX_UINT256);
       await usd.approve(address(backstop), MAX_UINT256);
+
+      await asset1.burn(BOB, await asset1.balanceOf(BOB));
       await asset1.mint(BOB, MINT_AMOUNT);
+
+      await asset2.burn(BOB, await asset2.balanceOf(BOB));
       await asset2.mint(BOB, MINT_AMOUNT);
+
+      await usd.burn(BOB, await usd.balanceOf(BOB));
       await usd.mint(BOB, MINT_AMOUNT);
+
       await swapPool1.deposit(MINT_AMOUNT);
       await swapPool2.deposit(MINT_AMOUNT);
       await backstop.deposit(MINT_AMOUNT);
@@ -210,6 +230,7 @@ export default async function (environment: TestSuiteEnvironment) {
     },
 
     async testImmediateBackstopWithdrawal() {
+
       const [lpTokens, fee] = await backstop.deposit(unit(20));
       const [reservesBefore, liabilitiesBefore] = await backstop.coverage();
       const [simulatedPayout] = await backstop.simulateWithdrawal((lpTokens * 3n) / 4n);
