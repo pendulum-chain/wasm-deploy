@@ -1,8 +1,6 @@
-import * as readline from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
-
+import { prompts } from "prompts";
 import { Keyring } from "@polkadot/api";
 
 import { ContractSourcecodeId, NamedAccountId, ScriptName } from "./types";
@@ -20,8 +18,6 @@ import { PromiseMutex } from "./utils/promiseMutex";
 import { TestSuite } from "./commands/test";
 import { DeployScript } from "./commands/deploy";
 import { SigningSubmitter } from "./api/submitter";
-
-import * as prompts from "prompts";
 
 export type RepositoryInitialization = "npm" | "yarn";
 
@@ -98,23 +94,22 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     if (suri === undefined) {
       while (true /* eslint-disable-line no-constant-condition */) {
         try {
-          suri = await prompts.prompts.password({
-            type: 'password',
-            name: 'value',
+          suri = (await prompts.password({
+            type: "password",
+            name: "value",
             message: `Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `,
-          });
-
-
+          })) as string | undefined;
         } catch (error) {
           // Graceful exit here
           process.exit();
         }
 
-
         if (suri === undefined) {
           console.log(`Invalid suri for address ${accountId}`);
-          continue
+          continue;
         }
+
+        suri = suri.trim();
 
         const keyRingPair = keyring.addFromUri(suri);
         const publicKey = keyring.addFromAddress(accountId);
