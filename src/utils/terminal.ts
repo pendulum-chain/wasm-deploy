@@ -87,7 +87,7 @@ export async function createAnimatedTextContext(
   let spinningIndex: number = 0;
 
   if (process.stdout.isTTY) {
-    inputReader = require("readline").createInterface({
+    inputReader = readline.createInterface({
       input: process.stdin,
       output: undefined,
       terminal: true,
@@ -159,6 +159,7 @@ export async function createAnimatedTextContext(
     updateDynamicText(lines, true);
     console.error("\nAn error occurred");
     console.error((error as Error).message);
+    console.error(error as Error);
     return false;
   } finally {
     if (process.stdout.isTTY) {

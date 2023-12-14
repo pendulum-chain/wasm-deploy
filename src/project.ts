@@ -1,7 +1,9 @@
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
+import { prompts } from "prompts";
+import { Keyring } from "@polkadot/api";
 
-import { ContractSourcecodeId, DeployScript, ScriptName } from "./types";
+import { ContractSourcecodeId, NamedAccountId, ScriptName } from "./types";
 import {
   ContractConfiguration,
   ImportMap,
@@ -9,8 +11,13 @@ import {
   NetworkConfig,
   parseConfigFile,
   RepositoryConfig,
+  TestSuiteConfig,
 } from "./parseConfig";
-import { isFailure, isSuccess } from "fefe";
+import { rawAddressesAreEqual } from "./utils/addresses";
+import { PromiseMutex } from "./utils/promiseMutex";
+import { TestSuite } from "./commands/test";
+import { DeployScript } from "./commands/deploy";
+import { SigningSubmitter } from "./api/submitter";
 
 export type RepositoryInitialization = "npm" | "yarn";
 
@@ -21,6 +28,8 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
   const projectFolder = join(process.cwd(), relativeProjectPath);
   const configFilePath = join(projectFolder, configFileName);
+  const deployScriptsPath = join(projectFolder, "deploy");
+  const testsPath = join(projectFolder, "test");
 
   const configFileContent = (await readFile(configFilePath)).toString("utf-8");
   const configuration = parseConfigFile(configFileContent);
@@ -39,16 +48,84 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
   const getGitCloneFolder = (contractId: ContractSourcecodeId): string => {
     const contractSource = getContractConfiguration(contractId);
+    if (contractSource.repository === undefined) {
+      return projectFolder;
+    }
+
     return join(gitFolder, contractSource.repository);
   };
 
-  const getRepositoryConfig = (contractId: string): RepositoryConfig => {
+  const getRepositoryConfig = (contractId: string): RepositoryConfig | undefined => {
     const { repository } = getContractConfiguration(contractId);
+    if (repository === undefined) {
+      return undefined;
+    }
+
     const repositoryConfig = configuration.repositories[repository];
     if (repositoryConfig === undefined)
       throw new Error(`Repository ${repository} does not exist in project ${relativeProjectPath}`);
 
     return repositoryConfig;
+  };
+
+  const getNetworkDefinition = (networkName: string): NetworkConfig => {
+    const networkConfig = configuration.networks[networkName];
+    if (networkConfig === undefined)
+      throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
+
+    return networkConfig;
+  };
+
+  const getSigningSubmitter = async (
+    networkName: string,
+    namedAccountId: NamedAccountId,
+    keyring: Keyring
+  ): Promise<SigningSubmitter> => {
+    const networkConfig = getNetworkDefinition(networkName);
+    const namedAccountConfig = networkConfig.namedAccounts[namedAccountId];
+
+    if (namedAccountConfig === undefined)
+      throw new Error(
+        `Named account ${namedAccountId} is not defined in the network definition for network ${networkName}`
+      );
+
+    const accountId = typeof namedAccountConfig === "string" ? namedAccountConfig : namedAccountConfig.address;
+    let suri = typeof namedAccountConfig === "string" ? undefined : namedAccountConfig.suri;
+    if (suri === undefined) {
+      while (true /* eslint-disable-line no-constant-condition */) {
+        try {
+          suri = (await prompts.password({
+            type: "password",
+            name: "value",
+            message: `Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `,
+          })) as string | undefined;
+        } catch (error) {
+          // Graceful exit here
+          process.exit();
+        }
+
+        if (suri === undefined) {
+          console.log(`Invalid suri for address ${accountId}`);
+          continue;
+        }
+
+        suri = suri.trim();
+
+        const keyRingPair = keyring.addFromUri(suri);
+        const publicKey = keyring.addFromAddress(accountId);
+        if (!rawAddressesAreEqual(keyRingPair.addressRaw, publicKey.addressRaw)) {
+          console.log(`Invalid suri for address ${accountId}`);
+        } else {
+          break;
+        }
+      }
+    }
+
+    return {
+      type: "signing",
+      keypair: keyring.addFromUri(suri),
+      mutex: new PromiseMutex(),
+    };
   };
 
   return {
@@ -78,13 +155,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       return configuration.limits;
     },
 
-    getNetworkDefinition(networkName: string): NetworkConfig {
-      const networkConfig = configuration.networks[networkName];
-      if (networkConfig === undefined)
-        throw new Error(`Network ${networkName} does not exist in project ${relativeProjectPath}`);
-
-      return networkConfig;
-    },
+    getNetworkDefinition,
 
     getImportPaths(contractId: string): string[] {
       let importpaths: string[] = [];
@@ -94,7 +165,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
         importpaths = contractConfig.importpaths;
       } else {
         const repositoryConfig = getRepositoryConfig(contractId);
-        if (repositoryConfig.importpaths !== undefined) {
+        if (repositoryConfig?.importpaths !== undefined) {
           importpaths = repositoryConfig.importpaths;
         }
       }
@@ -111,7 +182,7 @@ export async function initializeProject(relativeProjectPath: string, configFileN
         importmaps = contractConfig.importmaps;
       } else {
         const repositoryConfig = getRepositoryConfig(contractId);
-        if (repositoryConfig.importmaps !== undefined) {
+        if (repositoryConfig?.importmaps !== undefined) {
           importmaps = repositoryConfig.importmaps;
         }
       }
@@ -121,21 +192,26 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     },
 
     getContractSourcePath(contractId: ContractSourcecodeId): string {
-      const contractSource = getContractConfiguration(contractId);
-      return join(getGitCloneFolder(contractId), contractSource.path);
+      const contractConfiguration = getContractConfiguration(contractId);
+      return join(getGitCloneFolder(contractId), contractConfiguration.path);
+    },
+
+    isContractPrecompiled(contractId: ContractSourcecodeId): boolean {
+      const contractConfiguration = getContractConfiguration(contractId);
+      return contractConfiguration.isPrecompiled === true;
     },
 
     async readDeploymentScripts(): Promise<[ScriptName, DeployScript][]> {
-      const entries = await readdir(projectFolder, { recursive: true, withFileTypes: true });
+      const entries = await readdir(deployScriptsPath, { recursive: true, withFileTypes: true });
       const fileNames = entries
         .filter((entry) => entry.isFile())
-        .map((entry) => entry.name as ScriptName)
+        .map((entry) => entry.name)
         .filter((fileName) => fileName !== configFileName);
 
       const scripts: [ScriptName, DeployScript][] = await Promise.all(
         fileNames.map(async (file) => {
-          const path = join(projectFolder, file);
-          const imports: DeployScript = await import(path);
+          const path = join(deployScriptsPath, file);
+          const imports = (await import(path)) as DeployScript;
           return [file, imports];
         })
       );
@@ -143,6 +219,46 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       scripts.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
 
       return scripts;
+    },
+
+    async readTests(): Promise<{ testSuitConfig: TestSuiteConfig; testSuites: [ScriptName, TestSuite][] }> {
+      const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
+      const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+
+      const testSuites: [string, TestSuite][] = await Promise.all(
+        fileNames.map(async (file) => {
+          const path = join(testsPath, file);
+          const imports = (await import(path)) as TestSuite;
+          return [file, imports];
+        })
+      );
+
+      testSuites.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
+
+      const testSuitConfig = configuration.tests;
+      if (testSuitConfig === undefined)
+        throw new Error(`No "tests" configuration entry in project ${relativeProjectPath}`);
+
+      return {
+        testSuitConfig,
+        testSuites,
+      };
+    },
+
+    getSigningSubmitter,
+
+    async getAllSigningSubmitters(
+      networkName: string,
+      keyring: Keyring
+    ): Promise<Record<NamedAccountId, SigningSubmitter>> {
+      const signingSubmitters: Record<string, SigningSubmitter> = {};
+      const networkConfig = getNetworkDefinition(networkName);
+
+      for (const namedAccountId of Object.keys(networkConfig.namedAccounts)) {
+        signingSubmitters[namedAccountId] = await getSigningSubmitter(networkName, namedAccountId, keyring);
+      }
+
+      return signingSubmitters;
     },
   };
 }

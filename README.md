@@ -12,3 +12,4 @@ Alternatively you can use the parameter `local` instead of `foucoco`. This expec
 ```
 brew install binaryen
 ```
+
