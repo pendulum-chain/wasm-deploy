@@ -30,6 +30,10 @@ export async function runCommand(
           exitCode,
         });
       });
+
+      process.on("error", (error: string) => {
+        reject(error);
+      });
     } catch (error) {
       reject(error);
     }

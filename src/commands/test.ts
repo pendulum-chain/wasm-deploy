@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 
 import { Address, ArgumentType, ContractSourcecodeId } from "../types";
 import { ChainApi, connectToChain } from "../api/api";
@@ -94,7 +95,7 @@ export type TestSuiteEnvironment = {
   constructors: Record<string, TestConstructor>;
 };
 
-export type TestFunction = () => Promise<void>;
+export type TestFunction = (...fuzzingParameters: bigint[]) => Promise<void>;
 
 export type TestSuiteFunction = {
   (environment: TestSuiteEnvironment): Promise<Record<string, TestFunction>>;
@@ -387,11 +388,26 @@ async function processTestScripts(
         }
 
         console.log(`Run test function ${test}`);
-        await testSuiteInstance[test]();
-        if (expectedRevertMessage !== undefined) {
-          throw new Error(
-            `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
-          );
+
+        const noOfFuzzingParameters = testSuiteInstance[test].length;
+        const testIterations = noOfFuzzingParameters > 0 ? 64 * noOfFuzzingParameters : 1;
+        for (let iterations = 0; iterations < testIterations; iterations++) {
+          const fuzzArguments = [];
+
+          if (noOfFuzzingParameters > 0) {
+            const randomNumbers = randomBytes(noOfFuzzingParameters * 32);
+            for (let i = 0; i < noOfFuzzingParameters; i++) {
+              fuzzArguments.push(BigInt(`0x${randomNumbers.subarray(i * 32, (i + 1) * 32).toString("hex")}`));
+            }
+            console.log(`Fuzzing with arguments`, fuzzArguments);
+          }
+
+          await testSuiteInstance[test](...fuzzArguments);
+          if (expectedRevertMessage !== undefined) {
+            throw new Error(
+              `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
+            );
+          }
         }
       } catch (error: any /* eslint-disable-line @typescript-eslint/no-explicit-any */) {
         stopPrank(false);

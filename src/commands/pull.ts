@@ -55,10 +55,14 @@ export async function pull({ projectFolder }: PullOptions) {
 
       case "yarn": {
         console.log(`  Run yarn install`);
-        const yarnResult = await runCommand(["yarn", "install", "--ignore-engines"], { cwd: gitClonePath });
-
-        if (yarnResult.exitCode !== 0) {
-          throw new Error(`Yarn error: ${yarnResult.stdout}, ${yarnResult.stderr}`);
+        try {
+          const yarnResult = await runCommand(["yarn", "install", "--ignore-engines"], { cwd: gitClonePath });
+          if (yarnResult.exitCode !== 0) {
+            throw new Error(`Yarn error: ${yarnResult.stdout}, ${yarnResult.stderr}`);
+          }
+        } catch (error) {
+          console.error(`ERROR: There was a problem calling yarn for the repository ${repository}`);
+          console.error(error);
         }
 
         break;
