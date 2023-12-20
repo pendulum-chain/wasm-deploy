@@ -5,7 +5,8 @@
     "outDir": "build",
     "declaration": true,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node"]
+    "types": ["node"],
+    "moduleResolution": "Node16"
   },
 
   "include": ["src/**/*", "nabla/**/*"]

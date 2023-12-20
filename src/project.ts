@@ -226,13 +226,15 @@ export async function initializeProject(relativeProjectPath: string, configFileN
       const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
       const files: Dirent[] = entries.filter((entry) => entry.isFile());
 
-      const testSuites: [string, TestSuite][] = await Promise.all(
-        files.map(async (file) => {
-          const path = join(file.path, file.name);
-          const imports = (await import(path)) as TestSuite;
-          return [file.name, imports];
-        })
-      );
+      const testSuites: [string, TestSuite][] = (
+        await Promise.all(
+          files.map<Promise<[string, TestSuite]>>(async (file) => {
+            const path = join(file.path, file.name);
+            const imports = (await import(path)) as TestSuite;
+            return [file.name, imports];
+          })
+        )
+      ).filter(([, testSuite]) => testSuite.default !== undefined);
 
       testSuites.sort(([fileName1], [fileName2]) => (fileName1 < fileName2 ? -1 : fileName1 > fileName2 ? 1 : 0));
 

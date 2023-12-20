@@ -79,7 +79,7 @@ function extractContractExecutionOutput(
     return { type: "success", value };
   } else {
     const dataView = new DataView(data.buffer);
-    const prefix = dataView.getUint32(0);
+    const prefix = data.buffer.byteLength >= 4 ? dataView.getUint32(0) : 0;
     switch (prefix) {
       case 0x08c379a0:
         return { type: "reverted", description: api.createType("String", data.slice(4)).toString() };
@@ -87,10 +87,12 @@ function extractContractExecutionOutput(
       case 0x4e487b71:
         try {
           const errorCode =
-            dataView.getBigUint64(4, true) +
-            2n ** 64n * dataView.getBigUint64(12, true) +
-            2n ** 128n * dataView.getBigUint64(20, true) +
-            2n ** 192n * dataView.getBigUint64(28, true);
+            data.buffer.byteLength >= 36
+              ? dataView.getBigUint64(4, true) +
+                2n ** 64n * dataView.getBigUint64(12, true) +
+                2n ** 128n * dataView.getBigUint64(20, true) +
+                2n ** 192n * dataView.getBigUint64(28, true)
+              : -1n;
 
           return {
             type: "panic",

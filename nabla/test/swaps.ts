@@ -2,17 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 import { TestContract, TestSuiteEnvironment } from "../../src/index";
-import {
-  assertApproxEqAbs,
-  assertApproxEqRel,
-  assertEq,
-  assertGe,
-  assertGt,
-  assertLt,
-  assertFalse,
-  assertTrue,
-  e,
-} from "../../src/index";
+import { assertEq, assertGe, assertGt, assertLt, assertFalse, assertApproxEqAbs, assertTrue, e } from "../../src/index";
+import { changePoolCoverageTo } from "./lib/swapPoolTests";
 
 const FERDIE = "6hXHGkma9bKW6caAA5Z9Pto8Yxh9BbD8ckE15hSAhbMdF7RC";
 
@@ -20,42 +11,16 @@ export default async function (environment: TestSuiteEnvironment) {
   const {
     address,
     unit,
-    milliUnit,
-    getContractByAddress,
     vm,
     tester,
-    constructors: { newRouter, newMockERC20, newTestableERC20Wrapper, newSwapPool, newMockOracle, newNablaCurve },
+    constructors: { newRouter, newTestableERC20Wrapper, newTestableSwapPool, newMockOracle, newNablaCurve },
   } = environment;
 
-  const deadlineTime = Math.floor((Date.now() / 1000) + 10);
-
-  function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {
-    if (a !== 0n && b !== 0n) {
-      assertApproxEqRel(a, b, 5n * 10n ** 15n, errorMessage);
-    } else {
-      assertApproxEqAbs(a, b, milliUnit(5), errorMessage);
-    }
-  }
+  const deadlineTime = () => Math.floor(Date.now() / 1000 + 10);
 
   function makePath(from: TestContract, to: TestContract) {
     return [address(from), address(to)];
   }
-
-  const changePoolCoverageTo = async (pool: TestContract, targetCoverageRatio: bigint) => {
-    const poolAsset = getContractByAddress(await pool.asset());
-
-    const [reserves, liabilities] = await pool.coverage();
-    const targetReserves = (liabilities * targetCoverageRatio) / 10n ** 18n;
-
-    if (targetReserves > reserves) {
-      await poolAsset.mint(address(pool), targetReserves - reserves);
-    } else {
-      vm.startPrank(address(pool));
-      await vm.mintNative(address(pool), unit(20));
-      await poolAsset.transfer(tester, reserves - targetReserves);
-      vm.stopPrank();
-    }
-  };
 
   const testSwap = async () => {
     await swapPool1.deposit(DEPOSIT_POOL_AMOUNT);
@@ -74,7 +39,7 @@ export default async function (environment: TestSuiteEnvironment) {
       WITHDRAW_AMOUNT / 2n - LOW_SLIPPAGE,
       path,
       tester,
-      deadlineTime
+      deadlineTime()
     );
 
     const balanceAfter = await asset2.balanceOf(tester);
@@ -96,13 +61,13 @@ export default async function (environment: TestSuiteEnvironment) {
   const router = await newRouter();
   const treasury = FERDIE;
 
-  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 18, [1], [2], [], []);
-  const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 18, [1], [3], [], []);
+  const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 12, [1], [2], [], []);
+  const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 12, [1], [3], [], []);
 
   const oracle1 = await newMockOracle(address(asset1), unit(1));
   const oracle2 = await newMockOracle(address(asset2), unit(2));
 
-  const swapPool1 = await newSwapPool(
+  const swapPool1 = await newTestableSwapPool(
     address(asset1),
     address(nablaCurve),
     address(router),
@@ -111,7 +76,7 @@ export default async function (environment: TestSuiteEnvironment) {
     "Test LP 1",
     "LP1"
   );
-  const swapPool2 = await newSwapPool(
+  const swapPool2 = await newTestableSwapPool(
     address(asset2),
     address(nablaCurve),
     address(router),
@@ -123,13 +88,12 @@ export default async function (environment: TestSuiteEnvironment) {
 
   return {
     async setUp() {
-
-      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //we ensure that only the MINT_AMOUNT is on the required accounts by
       //burning pre-existing balances.
 
-      //This is required since the assets are on the standalone testing 
+      //This is required since the assets are on the standalone testing
       //chain and we cannot ensure in the test alone that the balances
-      //of these tokens is indeed 0 (a test could have run earlier) 
+      //of these tokens is indeed 0 (a test could have run earlier)
       await asset1.burn(tester, await asset1.balanceOf(tester));
       await asset2.burn(tester, await asset2.balanceOf(tester));
 
@@ -141,7 +105,6 @@ export default async function (environment: TestSuiteEnvironment) {
 
       await asset2.burn(address(swapPool1), await asset2.balanceOf(address(swapPool1)));
       await asset2.burn(address(swapPool2), await asset2.balanceOf(address(swapPool2)));
-
 
       await asset1.approve(address(router), MAX_UINT256);
       await asset2.approve(address(router), MAX_UINT256);
@@ -158,75 +121,170 @@ export default async function (environment: TestSuiteEnvironment) {
 
       await asset1.mint(tester, MINT_AMOUNT);
       await asset2.mint(tester, MINT_AMOUNT);
-
     },
 
     async testSwap() {
       await testSwap();
     },
 
-    async testSwapWithFee() {
-      await swapPool1.deposit(DEPOSIT_POOL_AMOUNT);
+    async testSwapWithLPFee() {
       await swapPool2.deposit(DEPOSIT_POOL_AMOUNT);
 
-      const balanceBefore = await asset2.balanceOf(tester);
+      const balanceBefore = await asset2.balanceOf(address(router));
       const treasuryBefore: bigint = await asset2.balanceOf(treasury);
 
       const [, liabilitiesBefore] = await swapPool2.coverage();
-      const path = makePath(asset1, asset2);
 
-      const quoteWithoutFee: bigint = await router.getAmountOut(WITHDRAW_AMOUNT, path);
-
-      await swapPool2.setSwapFees(150, 30, 20);
-      const quoteWithFee = await router.getAmountOut(WITHDRAW_AMOUNT, path);
+      // in this test we don't impose any protocol fee because
+      // it is hard to expect emit the correct value for ChargedSwapFees
+      // as it is influences by slippage
+      await swapPool2.setSwapFees(150, 50, 0);
+      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       // Check ChargedSwapFees event
       vm.expectEmit(swapPool1, "ChargedSwapFees", [
-        (quoteWithoutFee * 150n) / 10000n,
-        (quoteWithoutFee * 30n) / 10000n,
-        (quoteWithoutFee * 20n) / 10000n,
+        (WITHDRAW_AMOUNT * 150n) / 10000n,
+        (WITHDRAW_AMOUNT * 50n) / 10000n,
+        (WITHDRAW_AMOUNT * 0n) / 10000n,
       ]);
-      const amounts: bigint[] = await router.swapExactTokensForTokens(
-        WITHDRAW_AMOUNT,
-        ((WITHDRAW_AMOUNT / 2n) * 98n) / 100n - LOW_SLIPPAGE,
-        path,
-        tester,
-        deadlineTime
-      );
 
+      vm.startPrank(address(router));
+      // give enough funds to router to call contract functions
+      await vm.mintNative(address(router), unit(20));
+      const amountOut = await swapPool2.swapOutFromRouter(WITHDRAW_AMOUNT);
+      vm.stopPrank();
 
-
-      const balanceAfter = await asset2.balanceOf(tester);
+      const balanceAfter = await asset2.balanceOf(address(router));
       const treasuryAfter = await asset2.balanceOf(treasury);
 
-
-      const swapFees = quoteWithoutFee - quoteWithFee;
       const [, liabilitiesAfter] = await swapPool2.coverage();
 
-      assertGe(balanceAfter, balanceBefore, "Output asset balance afterwards not greater than balance before");
-
-      assertEq(amounts.length, 2, "Result amounts array length");
-      assertEq(amounts[0], WITHDRAW_AMOUNT, "First of resulting amounts supposed to be input amount");
-      assertApproxEqAbs(
-        quoteWithFee,
-        (quoteWithoutFee * 98n) / 100n,
-        3n,
-        "Expected quote after fee to equal quote before fee -2%"
+      assertEq(
+        balanceAfter,
+        balanceBefore + amountOut,
+        "Output asset balance afterwards not greater than balance before"
       );
-      assertEq(amounts[1], quoteWithFee, "Quote does not match actual swap result");
-
-      assertApproxEqAbs(
+      assertEq(amountOut, quoteWithFee, "Quote does not match actual swap result");
+      assertEq(
         treasuryAfter,
-        treasuryBefore + (swapFees * 20n) / 200n,
-        1n,
+        treasuryBefore,
         "Expected treasury balance to have increased by the amount of protocol fee charged"
       );
-      assertApproxEqAbs(
+      assertEq(
         liabilitiesAfter,
-        liabilitiesBefore + (swapFees * 3n) / 4n,
-        1n,
+        liabilitiesBefore + (WITHDRAW_AMOUNT * 150n) / 10000n,
         "Expected pool liabilities to increase by fee amount, so LP token worth increases"
       );
+    },
+
+    async testSwapWithFeeHighCoverage() {
+      await swapPool2.deposit(DEPOSIT_POOL_AMOUNT);
+
+      const balanceBefore = await asset2.balanceOf(address(router));
+      const treasuryBefore = await asset2.balanceOf(treasury);
+
+      await changePoolCoverageTo(swapPool2, e(1.3, 18), environment);
+      const [, liabilitiesBefore] = await swapPool2.coverage();
+
+      const quoteWithoutFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+
+      // in this test we don't impose any lp fee because
+      // this makes it easier to predict the other two fees
+      await swapPool2.setSwapFees(0, 30, 20);
+      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+
+      vm.startPrank(address(router));
+      // give enough funds to router to call contract functions
+      await vm.mintNative(address(router), unit(20));
+      const amountOut = await swapPool2.swapOutFromRouter(WITHDRAW_AMOUNT);
+      vm.stopPrank();
+
+      const balanceAfter = await asset2.balanceOf(address(router));
+      const treasuryAfter = await asset2.balanceOf(treasury);
+
+      const [, liabilitiesAfter] = await swapPool2.coverage();
+
+      assertEq(
+        balanceAfter,
+        balanceBefore + amountOut,
+        "Output asset balance afterwards not greater than balance before"
+      );
+
+      // psi(., l) (i.e., for constant l) is a convex function and therefore
+      // psi(t*a + (t-1)*b, l) <= t*psi(a, l) + (t-1)*psi(b, l)
+      // for every 0 <= t <= 1
+      // equivalently (what we test here):
+      // t * (psi(b, l) - psi(b - c, l)) <= psi(b, l) - psi(b - t*c, l)
+      assertGe(
+        quoteWithFee,
+        (quoteWithoutFee * 995n) / 1000n,
+        "Expected quote after fee to equal quote before fee -0.5%"
+      );
+      assertEq(amountOut, quoteWithFee, "Quote does not match actual swap result");
+      // With high CR the slippage function psi has a derivative of more than 1
+      // so that the actual amount transferred to the treasury
+      // should be more than (WITHDRAW_AMOUNT * 20) / 10000
+      assertGt(
+        treasuryAfter,
+        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 10000n,
+        "Expected treasury balance to have increased by the amount of protocol fee charged"
+      );
+      assertEq(liabilitiesAfter, liabilitiesBefore, "Expected pool liabilities to stay the same");
+    },
+
+    async testSwapWithFeeLowCoverage() {
+      await swapPool2.deposit(DEPOSIT_POOL_AMOUNT);
+
+      const balanceBefore = await asset2.balanceOf(address(router));
+      const treasuryBefore = await asset2.balanceOf(treasury);
+
+      await changePoolCoverageTo(swapPool2, e(0.9, 18), environment);
+      const [, liabilitiesBefore] = await swapPool2.coverage();
+
+      const quoteWithoutFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+
+      // in this test we don't impose any lp fee because
+      // this makes it easier to predict the other two fees
+      await swapPool2.setSwapFees(0, 30, 20);
+      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+
+      vm.startPrank(address(router));
+      // give enough funds to router to call contract functions
+      await vm.mintNative(address(router), unit(20));
+      const amountOut = await swapPool2.swapOutFromRouter(WITHDRAW_AMOUNT);
+      vm.stopPrank();
+
+      const balanceAfter = await asset2.balanceOf(address(router));
+      const treasuryAfter = await asset2.balanceOf(treasury);
+
+      const [, liabilitiesAfter] = await swapPool2.coverage();
+
+      assertEq(
+        balanceAfter,
+        balanceBefore + amountOut,
+        "Output asset balance afterwards not greater than balance before"
+      );
+
+      // psi(., l) (i.e., for constant l) is a convex function and therefore
+      // psi(t*a + (t-1)*b, l) <= t*psi(a, l) + (t-1)*psi(b, l)
+      // for every 0 <= t <= 1
+      // equivalently (what we test here):
+      // t * (psi(b, l) - psi(b - c, l)) <= psi(b, l) - psi(b - t*c, l)
+      assertGe(
+        quoteWithFee,
+        (quoteWithoutFee * 995n) / 1000n,
+        "Expected quote after fee to equal quote before fee -0.5%"
+      );
+      assertEq(amountOut, quoteWithFee, "Quote does not match actual swap result");
+      // With low CR the slippage function psi has a derivative of less than 1
+      // so that the actual amount transferred to the treasury
+      // should be less than (WITHDRAW_AMOUNT * 20) / 10000
+      assertLt(
+        treasuryAfter,
+        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 10000n,
+        "Expected treasury balance to have increased by the amount of protocol fee charged"
+      );
+      assertEq(liabilitiesAfter, liabilitiesBefore, "Expected pool liabilities to stay the same");
     },
 
     async testImperfectCoverageRatioWithdrawal() {
@@ -256,17 +314,11 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(10) - HIGH_SLIPPAGE,
         path1,
         tester,
-        deadlineTime
+        deadlineTime()
       );
 
       const path2 = makePath(asset2, asset1);
-      await router.swapExactTokensForTokens(
-        forwardSwapOutput,
-        unit(20) - HIGH_SLIPPAGE,
-        path2,
-        tester,
-        deadlineTime
-      );
+      await router.swapExactTokensForTokens(forwardSwapOutput, unit(20) - HIGH_SLIPPAGE, path2, tester, deadlineTime());
 
       const [finalReserves, finalLiabilities] = await swapPool1.coverage();
       const [finalReserves2, finalLiabilities2] = await swapPool2.coverage();
@@ -311,22 +363,14 @@ export default async function (environment: TestSuiteEnvironment) {
       await swapPool2.deposit(unit(30));
 
       const path1 = makePath(asset1, asset2);
-      await router.swapExactTokensForTokens(
-        unit(20),
-        unit(10) - HIGH_SLIPPAGE,
-        path1,
-        tester,
-        deadlineTime
-      );
+      await router.swapExactTokensForTokens(unit(20), unit(10) - HIGH_SLIPPAGE, path1, tester, deadlineTime());
 
       const initialBalance1 = await asset1.balanceOf(tester);
       const initialBalance2 = await asset2.balanceOf(tester);
 
-
       // Swap forward
       const [initialReserves, initialLiabilities] = await swapPool1.coverage();
       const [initialReserves2, initialLiabilities2] = await swapPool2.coverage();
-
 
       const path2 = makePath(asset1, asset2);
       const [, forwardSwapOutput] = await router.swapExactTokensForTokens(
@@ -334,24 +378,16 @@ export default async function (environment: TestSuiteEnvironment) {
         unit(10) - HIGH_SLIPPAGE,
         path2,
         tester,
-        deadlineTime
+        deadlineTime()
       );
-
 
       const path3 = makePath(asset2, asset1);
 
-      await router.swapExactTokensForTokens(
-        forwardSwapOutput,
-        unit(20) - HIGH_SLIPPAGE,
-        path3,
-        tester,
-        deadlineTime
-      );
+      await router.swapExactTokensForTokens(forwardSwapOutput, unit(20) - HIGH_SLIPPAGE, path3, tester, deadlineTime());
 
       const [finalReserves, finalLiabilities] = await swapPool1.coverage();
 
       const [finalReserves2, finalLiabilities2] = await swapPool2.coverage();
-
 
       assertEq(finalLiabilities, initialLiabilities, "Liabilities must eventually be equal to initial ones");
       assertEq(finalLiabilities2, initialLiabilities2, "Liabilities must eventually be equal to initial ones");
@@ -399,36 +435,53 @@ export default async function (environment: TestSuiteEnvironment) {
 
       vm.expectRevert("Pausable: paused");
 
-
       await router.swapExactTokensForTokens(
         WITHDRAW_AMOUNT,
         WITHDRAW_AMOUNT / 2n - LOW_SLIPPAGE,
         path,
         tester,
-        deadlineTime
+        deadlineTime()
       );
 
       await router.unpause();
       assertFalse(await router.paused());
     },
 
-    async testSwapCrossingFullPoolCoverage() {
+    async testSwapSplitInHalf() {
       await swapPool1.deposit(DEPOSIT_POOL_AMOUNT);
 
-      await changePoolCoverageTo(swapPool1, e(1.3, 18));
+      await changePoolCoverageTo(swapPool1, e(1.3, 18), environment);
       const poolBalance = await asset1.balanceOf(address(swapPool1));
       const singleSwap = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
 
+      vm.startPrank(address(router));
+      // give enough funds to router to call contract functions
+      await vm.mintNative(address(router), unit(20));
+      const firstHalf = await swapPool1.swapOutFromRouter((poolBalance * 3n) / 13n);
+      vm.stopPrank();
+      const doubleSwap = firstHalf + (await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n));
+
+      assertApproxEqAbs(
+        singleSwap,
+        doubleSwap,
+        1n,
+        "Expected swapped amount to be the same, no matter if done in one or two steps"
+      );
+    },
+
+    async testSwapCrossingFullPoolCoverage() {
+      await swapPool1.deposit(DEPOSIT_POOL_AMOUNT);
+
+      await changePoolCoverageTo(swapPool1, e(1.3, 18), environment);
+      const poolBalance = await swapPool1.reserve();
+      const singleSwap = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
+
       const firstHalf = await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n);
-      await changePoolCoverageTo(swapPool1, e(1, 18));
+      await changePoolCoverageTo(swapPool1, e(1, 18), environment);
       const equiPoolBalance = await asset1.balanceOf(address(swapPool1));
       const doubleSwap = firstHalf + (await swapPool1.quoteSwapOut((equiPoolBalance * 3n) / 10n));
 
-      assertApproxEq(
-        singleSwap,
-        doubleSwap,
-        "Expected swapped amount to be the same, no matter if done in one or two steps"
-      );
+      assertEq(singleSwap, doubleSwap, "Expected swapped amount to be the same, no matter if done in one or two steps");
     },
   };
 }
