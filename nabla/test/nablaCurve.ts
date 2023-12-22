@@ -126,6 +126,8 @@ export default async function (environment: TestSuiteEnvironment) {
       for (let decimals = 8n; decimals < 24n; decimals++) {
         const amm = await newVendingMachine(address(curve), decimals);
         await amm.init(2n * 10n ** decimals, 5n * 10n ** decimals);
+        // we shift right by 176 bits (256 - 80) because we want both fuzz variables
+        // to be in the range 0 to 2 ** 80 - 1
         await amm.deposit(deposit >> 176n);
         await amm.swapInto(deposit2 >> 176n);
       }

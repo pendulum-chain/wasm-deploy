@@ -11,6 +11,8 @@ import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitt
 import { PanicCode } from "@pendulum-chain/api-solang";
 import { Codec } from "@polkadot/types-codec/types";
 
+const NUMBER_OF_FUZZING_ITERATIONS = 64;
+
 export interface RunTestSuitesOptions {
   projectFolder: string;
   network: string;
@@ -389,14 +391,15 @@ async function processTestScripts(
 
         console.log(`Run test function ${test}`);
 
-        const noOfFuzzingParameters = testSuiteInstance[test].length;
-        const testIterations = noOfFuzzingParameters > 0 ? 64 * noOfFuzzingParameters : 1;
+        const numberOfFuzzingParameters = testSuiteInstance[test].length;
+        const testIterations =
+          numberOfFuzzingParameters > 0 ? NUMBER_OF_FUZZING_ITERATIONS * numberOfFuzzingParameters : 1;
         for (let iterations = 0; iterations < testIterations; iterations++) {
           const fuzzArguments = [];
 
-          if (noOfFuzzingParameters > 0) {
-            const randomNumbers = randomBytes(noOfFuzzingParameters * 32);
-            for (let i = 0; i < noOfFuzzingParameters; i++) {
+          if (numberOfFuzzingParameters > 0) {
+            const randomNumbers = randomBytes(numberOfFuzzingParameters * 32);
+            for (let i = 0; i < numberOfFuzzingParameters; i++) {
               fuzzArguments.push(BigInt(`0x${randomNumbers.subarray(i * 32, (i + 1) * 32).toString("hex")}`));
             }
             console.log(`Fuzzing with arguments`, fuzzArguments);

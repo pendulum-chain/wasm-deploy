@@ -224,7 +224,6 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
     async readTests(): Promise<{ testSuitConfig: TestSuiteConfig; testSuites: [ScriptName, TestSuite][] }> {
       const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
-      console.log(entries);
       const files: Dirent[] = entries.filter((entry) => entry.isFile());
 
       const testSuites: [string, TestSuite][] = await Promise.all(
