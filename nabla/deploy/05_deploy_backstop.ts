@@ -12,7 +12,7 @@ async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployE
   await deployments.deploy("backstop", {
     from: deployer,
     contract: "BackstopPool",
-    args: [router.address, mUSD.address, curve.address, "0xAmber Backstop LP", "mUSD-BLP"],
+    args: [router.address, mUSD.address, "0xAmber Backstop LP", "mUSD-BLP"],
     log: true,
   });
 }
