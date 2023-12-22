@@ -45,8 +45,8 @@
       "path": "contracts/src/mock/MockOracle.sol"
     },
     "VendingMachine": {
-      "path": "VendingMachine.contract",
-      "isPrecompiled": true
+      "repository": "nablaCurve",
+      "path": "test/util/VendingMachine.sol"
     }
   },
   "repositories": {
@@ -54,14 +54,11 @@
       "git": "https://github.com/0xamberhq/contracts.git",
       "branch": "feature/backstop-pool-coverage-ratio",
       "init": "yarn",
-      "importpaths": [
-        "contracts/@chain/pendulum",
-        "node_modules"
-      ]
+      "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
     "nablaCurve": {
       "git": "https://github.com/0xamberhq/curve.git",
-      "branch": "main",
+      "branch": "3-change-slippage-curve",
       "init": "yarn"
     },
     "pendulumWrappers": {

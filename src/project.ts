@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
+import { Dirent } from "node:fs";
 import { prompts } from "prompts";
 import { Keyring } from "@polkadot/api";
 
@@ -223,13 +224,13 @@ export async function initializeProject(relativeProjectPath: string, configFileN
 
     async readTests(): Promise<{ testSuitConfig: TestSuiteConfig; testSuites: [ScriptName, TestSuite][] }> {
       const entries = await readdir(testsPath, { recursive: true, withFileTypes: true });
-      const fileNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+      const files: Dirent[] = entries.filter((entry) => entry.isFile());
 
       const testSuites: [string, TestSuite][] = await Promise.all(
-        fileNames.map(async (file) => {
-          const path = join(testsPath, file);
+        files.map(async (file) => {
+          const path = join(file.path, file.name);
           const imports = (await import(path)) as TestSuite;
-          return [file, imports];
+          return [file.name, imports];
         })
       );
 

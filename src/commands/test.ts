@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 
 import { Address, ArgumentType, ContractSourcecodeId } from "../types";
 import { ChainApi, connectToChain } from "../api/api";
@@ -9,6 +10,8 @@ import { toUnit } from "../utils/rationals";
 import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitter";
 import { PanicCode } from "@pendulum-chain/api-solang";
 import { Codec } from "@polkadot/types-codec/types";
+
+const NUMBER_OF_FUZZING_ITERATIONS = 64;
 
 export interface RunTestSuitesOptions {
   projectFolder: string;
@@ -94,7 +97,7 @@ export type TestSuiteEnvironment = {
   constructors: Record<string, TestConstructor>;
 };
 
-export type TestFunction = () => Promise<void>;
+export type TestFunction = (...fuzzingParameters: bigint[]) => Promise<void>;
 
 export type TestSuiteFunction = {
   (environment: TestSuiteEnvironment): Promise<Record<string, TestFunction>>;
@@ -387,11 +390,27 @@ async function processTestScripts(
         }
 
         console.log(`Run test function ${test}`);
-        await testSuiteInstance[test]();
-        if (expectedRevertMessage !== undefined) {
-          throw new Error(
-            `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
-          );
+
+        const numberOfFuzzingParameters = testSuiteInstance[test].length;
+        const testIterations =
+          numberOfFuzzingParameters > 0 ? NUMBER_OF_FUZZING_ITERATIONS * numberOfFuzzingParameters : 1;
+        for (let iterations = 0; iterations < testIterations; iterations++) {
+          const fuzzArguments = [];
+
+          if (numberOfFuzzingParameters > 0) {
+            const randomNumbers = randomBytes(numberOfFuzzingParameters * 32);
+            for (let i = 0; i < numberOfFuzzingParameters; i++) {
+              fuzzArguments.push(BigInt(`0x${randomNumbers.subarray(i * 32, (i + 1) * 32).toString("hex")}`));
+            }
+            console.log(`Fuzzing with arguments`, fuzzArguments);
+          }
+
+          await testSuiteInstance[test](...fuzzArguments);
+          if (expectedRevertMessage !== undefined) {
+            throw new Error(
+              `Test was expected to revert with message "${expectedRevertMessage}" but no revert happened.`
+            );
+          }
         }
       } catch (error: any /* eslint-disable-line @typescript-eslint/no-explicit-any */) {
         stopPrank(false);
