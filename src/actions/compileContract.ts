@@ -28,10 +28,18 @@ export async function compileContract(
   return uploadedCodePromise;
 }
 
+export interface MessageMetadata {
+  mutates?: boolean;
+  label?: string;
+}
+
 export interface MetadataFile {
   source?: {
     hash?: string;
     wasm?: string;
+  };
+  spec: {
+    messages?: MessageMetadata[];
   };
 }
 
@@ -111,6 +119,17 @@ async function actuallyCompileContract(
   }
   metadata.source.hash = codeHexHash;
   metadata.source.wasm = hexContract;
+
+  const { mutatingOverwrites } = project.getContractConfiguration(contractId);
+  if (mutatingOverwrites !== undefined) {
+    Object.entries(mutatingOverwrites).forEach(([messageLabel, mutating]) => {
+      const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
+      if (foundMessage !== undefined && mutating !== undefined) {
+        foundMessage.mutates = mutating;
+      }
+    });
+  }
+
   await writeFile(metadataFileName, JSON.stringify(metadata, null, 2));
 
   return metadataFileName;
