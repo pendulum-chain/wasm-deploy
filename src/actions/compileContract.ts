@@ -122,10 +122,10 @@ async function actuallyCompileContract(
 
   const { mutatingOverwrites } = project.getContractConfiguration(contractId);
   if (mutatingOverwrites !== undefined) {
-    Object.entries(mutatingOverwrites).forEach(([messageLabel, mutating]) => {
+    Object.entries(mutatingOverwrites).forEach(([messageLabel, mutates]) => {
       const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
-      if (foundMessage !== undefined && mutating !== undefined) {
-        foundMessage.mutates = mutating;
+      if (foundMessage !== undefined && mutates !== undefined) {
+        foundMessage.mutates = mutates;
       }
     });
   }
