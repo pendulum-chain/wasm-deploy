@@ -2,6 +2,7 @@ import {
   array,
   boolean,
   enumerate,
+  FefeError,
   isFailure,
   isSuccess,
   number,
@@ -30,6 +31,7 @@ const validateContractSourceReference = object(
     isPrecompiled: optional(boolean()),
     importpaths: optional(array(string())),
     importmaps: optional(array(validateImportMap)),
+    mutatingOverwrites: optional(objectMap(boolean())),
   },
   { allowExcessProperties: false }
 );
@@ -107,13 +109,30 @@ const validateConfigFile = object(
   { allowExcessProperties: false }
 );
 
+function prettyPrintFefeErrors(error: FefeError): string[] {
+  switch (error.type) {
+    case "leaf":
+      return [`${error.reason}`];
+    case "branch":
+      return error.childErrors.map(
+        (childError) => `${String(childError.key)} -> ${prettyPrintFefeErrors(childError.error)}`
+      );
+  }
+}
+
 export function parseConfigFile(configFileContent: string) {
   const parsedConfiguration: unknown = JSON.parse(configFileContent);
 
   const validatedConfiguration = validateConfigFile(parsedConfiguration);
 
   if (isFailure(validatedConfiguration) || !isSuccess(validatedConfiguration)) {
-    console.log(validatedConfiguration.left);
+    console.log("Error in configuration file");
+
+    console.log(
+      prettyPrintFefeErrors(validatedConfiguration.left)
+        .map((error) => `- ${error}`)
+        .join("\n")
+    );
     process.exit(1);
   }
 
