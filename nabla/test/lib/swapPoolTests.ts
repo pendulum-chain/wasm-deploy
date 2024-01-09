@@ -29,6 +29,7 @@ export async function changePoolCoverageTo(
     await poolAsset.mint(address(pool), targetReservesWithSlippage - reservesWithSlippage);
   } else {
     vm.startPrank(address(pool));
+    // give enough funds to pool to call contract functions
     await vm.mintNative(address(pool), unit(20));
     await poolAsset.transfer(tester, reservesWithSlippage - targetReservesWithSlippage);
     vm.stopPrank();
