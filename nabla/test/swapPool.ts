@@ -1,8 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
-import { TestContract, TestSuiteEnvironment } from "../../src/index";
-import { assertApproxEqAbs, assertApproxEqRel, assertEq, assertFalse, assertTrue, e } from "../../src/index";
+import { TestSuiteEnvironment } from "../../src/index";
+import { assertApproxEqRel, assertEq, assertFalse, assertTrue, e } from "../../src/index";
+import { assertApproxEq } from "./lib/extraAssertions";
+import {
+  testPoolCap as genericTestPoolCap,
+  testOnlyOwnerCanSetPoolCap as genericTestOnlyOwnerCanSetPoolCap,
+} from "./lib/genericPoolTests";
+import { changePoolCoverageTo } from "./lib/swapPoolTests";
 
 const CHARLIE = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
 const FERDIE = "6hXHGkma9bKW6caAA5Z9Pto8Yxh9BbD8ckE15hSAhbMdF7RC";
@@ -11,43 +17,17 @@ export default async function (environment: TestSuiteEnvironment) {
   const {
     address,
     unit,
-    milliUnit,
-    getContractByAddress,
     vm,
     tester,
-    constructors: { newMockERC20, newNablaCurve, newTestableSwapPool, newTestableERC20Wrapper },
+    constructors: { newNablaCurve, newTestableSwapPool, newTestableERC20Wrapper },
   } = environment;
-
-  function assertApproxEq(a: bigint, b: bigint, errorMessage: string): void {
-    if (a !== 0n && b !== 0n) {
-      assertApproxEqRel(a, b, 5n * 10n ** 15n, errorMessage);
-    } else {
-      assertApproxEqAbs(a, b, milliUnit(5), errorMessage);
-    }
-  }
 
   const MAX_UINT256 = 2n ** 256n - 1n;
   const MINT_AMOUNT = unit(100);
 
-  const changePoolCoverageTo = async (pool: TestContract, targetCoverageRatio: bigint) => {
-    const poolAsset = getContractByAddress(await pool.asset());
-
-    const [reserves, liabilities] = await pool.coverage();
-    const targetReserves = (liabilities * targetCoverageRatio) / 10n ** 18n;
-
-    if (targetReserves > reserves) {
-      await poolAsset.mint(address(pool), targetReserves - reserves);
-    } else {
-      vm.startPrank(address(pool));
-      await vm.mintNative(address(pool), unit(20));
-      await poolAsset.transfer(tester, reserves - targetReserves);
-      vm.stopPrank();
-    }
-  };
-
   const nablaCurve = await newNablaCurve(0, e(0.01, 18));
 
-  const asset = await newTestableERC20Wrapper("Test Token", "TEST", 18, [1], [1], [], []);
+  const asset = await newTestableERC20Wrapper("Test Token", "TEST", 12, [1], [1], [], []);
   const pool = await newTestableSwapPool(address(asset), address(nablaCurve), 0, 0, 0, "Test LP Token", "LP");
 
   return {
@@ -60,12 +40,12 @@ export default async function (environment: TestSuiteEnvironment) {
       // Important to deposit something before tests start, as first deposit
       // does not invoke usual _sharesToMint() logic, due to total supply being 0
 
-      //we ensure that only the MINT_AMOUNT is on the required accounts by 
+      //we ensure that only the MINT_AMOUNT is on the required accounts by
       //burning pre-existing balances.
 
-      //This is required since the assets are on the standalone testing 
+      //This is required since the assets are on the standalone testing
       //chain and we cannot ensure in the test alone that the balances
-      //of these tokens is indeed 0 (a test could have run earlier) 
+      //of these tokens is indeed 0 (a test could have run earlier)
       await asset.burn(CHARLIE, await asset.balanceOf(CHARLIE));
       await asset.mint(CHARLIE, unit(1));
 
@@ -76,29 +56,11 @@ export default async function (environment: TestSuiteEnvironment) {
     },
 
     async testPoolCap() {
-      assertEq(await pool.poolCap(), 2n ** 256n - 1n, "Expected pool to have max cap by default");
-
-      await pool.deposit(unit(1));
-
-      const [reserves] = await pool.coverage();
-      const newCap = reserves + unit(1);
-      await pool.setPoolCap(newCap);
-
-      // Expectation: No revert
-      await pool.deposit(unit(1));
-
-      // Expectation: Even tiny deposit fails, but cannot be minimally small or curve errors
-      vm.expectRevert("deposit: CAP_EXCEEDED");
-      await pool.deposit(unit(0.0001));
+      await genericTestPoolCap(pool, environment);
     },
 
     async testOnlyOwnerCanSetPoolCap() {
-      await pool.setPoolCap(unit(100));
-
-      vm.startPrank(FERDIE);
-      vm.expectRevert("Ownable: caller is not the owner");
-      await pool.setPoolCap(unit(100));
-      vm.stopPrank();
+      await genericTestOnlyOwnerCanSetPoolCap(pool, environment);
     },
 
     async testOnlyOwnerCanSetSwapFee() {
@@ -167,21 +129,20 @@ export default async function (environment: TestSuiteEnvironment) {
       );
     },
 
-    // this test is also failing in the original test suite, so we exclude it here
-    async exclude_testDepositWithdrawalAffectAccumulatedSlippage() {
-      await changePoolCoverageTo(pool, e(0.5, 18));
-      const accumulatedSlippageInitial = await pool.accumulatedSlippage();
+    async testDepositWithdrawalAffectAccumulatedSlippage() {
+      await changePoolCoverageTo(pool, e(0.5, 18), environment);
+      const accumulatedSlippageInitial = (await pool.reserveWithSlippage()) - (await pool.reserve());
 
       const [lpTokens, depositFee] = await pool.deposit(unit(20));
       assertEq(
-        await pool.accumulatedSlippage(),
+        (await pool.reserveWithSlippage()) - (await pool.reserve()),
         accumulatedSlippageInitial + depositFee,
         "Unexpected accumulated slippage after deposit"
       );
 
       const [, withdrawalFee] = await pool.withdraw(lpTokens, unit(19.99));
       assertEq(
-        await pool.accumulatedSlippage(),
+        (await pool.reserveWithSlippage()) - (await pool.reserve()),
         accumulatedSlippageInitial + depositFee + withdrawalFee,
         "Unexpected accumulated slippage after withdrawal"
       );

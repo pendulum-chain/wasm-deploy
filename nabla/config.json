@@ -41,10 +41,6 @@
       "repository": "nablaContracts",
       "path": "contracts/test/lib/TestableSwapPool.sol"
     },
-    "MockERC20": {
-      "repository": "nablaContracts",
-      "path": "contracts/src/mock/MockERC20.sol"
-    },
     "MockOracle": {
       "repository": "nablaContracts",
       "path": "contracts/src/mock/MockOracle.sol"
@@ -57,7 +53,7 @@
   "repositories": {
     "nablaContracts": {
       "git": "https://github.com/0xamberhq/contracts.git",
-      "branch": "feature/backstop-pool-coverage-ratio",
+      "branch": "59-incorporate-new-spec",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
