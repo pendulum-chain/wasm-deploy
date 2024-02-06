@@ -1,12 +1,12 @@
 {
   "contracts": {
-    "TestableERC20Wrapper": {
-      "repository": "pendulumWrappers",
-      "path": "testable-erc20-wrapper/TestableERC20Wrapper.sol"
-    },
     "Router": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/Router.sol"
+      "path": "contracts/src/core/Router.sol",
+      "argumentNameOverwrites": {
+        "oracleByAsset": ["asset"],
+        "poolByAsset": ["asset"]
+      }
     },
     "NablaCurve": {
       "repository": "nablaCurve",
@@ -14,11 +14,17 @@
     },
     "BackstopPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/BackstopPool.sol"
+      "path": "contracts/src/core/BackstopPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "SwapPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/SwapPool.sol"
+      "path": "contracts/src/core/SwapPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "ERC20Wrapper": {
       "repository": "pendulumWrappers",
@@ -27,40 +33,40 @@
         "balanceOf": false,
         "totalSupply": false,
         "allowance": false
+      },
+      "messageNameOverwrites": {
+        "name_": "name",
+        "symbol_": "symbol",
+        "decimals_": "decimals",
+        "variant_": "variant",
+        "index_": "index",
+        "code_": "code",
+        "issuer_": "issuer"
       }
     },
     "PriceOracleWrapper": {
       "repository": "pendulumWrappers",
-      "path": "price-oracle-wrapper/PriceOracleWrapper.sol"
-    },
-    "TestableBackstopPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableBackstopPool.sol"
-    },
-    "TestableSwapPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableSwapPool.sol"
-    },
-    "MockOracle": {
-      "repository": "nablaContracts",
-      "path": "contracts/src/mock/MockOracle.sol"
-    },
-    "VendingMachine": {
-      "repository": "nablaCurve",
-      "path": "test/util/VendingMachine.sol"
+      "path": "price-oracle-wrapper/PriceOracleWrapper.sol",
+      "mutatingOverwrites": {
+        "getAssetPrice": false,
+        "getAnyAssetSupply": false,
+        "getAnyAssetLastUpdateTimestamp": false,
+        "getAnyAssetPrice": false,
+        "getAnyAsset": false
+      }
     }
   },
   "repositories": {
     "nablaContracts": {
       "git": "https://github.com/NablaFinance/contracts.git",
-      "branch": "59-incorporate-new-spec",
+      "branch": "pendulum-launch",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
     "nablaCurve": {
       "git": "https://github.com/NablaFinance/curve.git",
-      "branch": "3-change-slippage-curve",
-      "init": "yarn"
+      "branch": "main",
+      "init": "npm"
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
@@ -68,6 +74,12 @@
     }
   },
   "networks": {
+    "pendulum": {
+      "namedAccounts": {
+        "deployer": "6brtrQNiDYnte7oan4y3UUCJ3Ci9sK8k5cGjiHwKdVnz9KZ2"
+      },
+      "rpcUrl": "wss://rpc-pendulum.prd.pendulumchain.tech:443"
+    },
     "foucoco": {
       "namedAccounts": {
         "deployer": "6iFKMtX29zYoHRgDkPTXKuRsHRbJ3Gnaxyc4dRrZTANHvZi3"
@@ -79,14 +91,6 @@
         "deployer": {
           "address": "6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr",
           "suri": "//Alice"
-        },
-        "bob": {
-          "address": "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT",
-          "suri": "//Bob"
-        },
-        "root": {
-          "address": "6hc7e55FaBEbQAHB7hFFU39CPvcrsW7QhM3Qv15S9cWjkK6t",
-          "suri": "//AltoParaíso"
         }
       },
       "rpcUrl": "ws://127.0.0.1:9944"
@@ -102,6 +106,6 @@
       "refTime": "10000000000000000",
       "proofSize": "10000000000000000"
     },
-    "storageDeposit": "10000000000000"
+    "storageDeposit": "2300000000000"
   }
 }

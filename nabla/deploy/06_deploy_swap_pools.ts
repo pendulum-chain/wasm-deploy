@@ -1,74 +1,115 @@
 import { WasmDeployEnvironment } from "../../src/index";
-import { registerSwapPool } from "../_lib";
+import {
+  registerSwapPool,
+  setSwapFees,
+  setInsuranceWithdrawalTimelock,
+  setPoolCap,
+  setMaxCoverageRatio,
+} from "../_lib";
 
-async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
+import { selectDeployment } from "../deployments/selector";
+
+async function DeploySwapPools({ getNamedAccounts, deployments, deploymentName }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
-  const treasury = deployer;
 
-  const [backstop, router, curve, mEUR, mETH, mUSD] = await Promise.all([
+  const deploymentDescription = selectDeployment(deploymentName, deployer.accountId);
+
+  const tokens = Object.entries(deploymentDescription.tokens);
+  const curves = Object.entries(deploymentDescription.curves);
+
+  const [backstop, router, curveDeployments, tokenDeployments] = await Promise.all([
     deployments.get("backstop"),
     deployments.get("router"),
-    deployments.get("amber-curve-0.0-0.01"),
-    deployments.get("mEUR"),
-    deployments.get("mETH"),
-    deployments.get("mUSD"),
+    Promise.all(curves.map(async ([curveName, _]) => deployments.get(`curve-${curveName}`))),
+    Promise.all(tokens.map(async ([tokenName, _]) => deployments.get(`${tokenName}Erc20Wrapper`))),
   ]);
 
-  const poolEUR = await deployments.deploy("swap-mEUR", {
-    from: deployer,
-    contract: "SwapPool",
-    args: [
-      mEUR.address,
-      curve.address,
-      router.address,
-      backstop.address,
-      treasury.accountId,
-      "0xAmber mEUR Swap LP",
-      "mEUR-LP",
-    ],
-    log: true,
-  });
+  for (const swapPoolEntry of Object.entries(deploymentDescription.swapPools)) {
+    const [token, poolDescription] = swapPoolEntry;
+    const {
+      curve,
+      treasuryAccount,
+      lpTokenName,
+      lpTokenSymbol,
+      insuranceFeeBasisPoints,
+      lpFeeBasisPoints,
+      backstopFeeBasisPoints,
+      protocolFeeBasisPoints,
+      insuranceWithdrawalTimelock,
+      poolCapUnits,
+      maxCoverageRatioPercent,
+    } = poolDescription;
 
-  const poolETH = await deployments.deploy("swap-mETH", {
-    from: deployer,
-    contract: "SwapPool",
-    args: [
-      mETH.address,
-      curve.address,
-      router.address,
-      backstop.address,
-      treasury.accountId,
-      "0xAmber mETH Swap LP",
-      "mETH-LP",
-    ],
-    log: true,
-  });
+    const tokenIndex = tokens.findIndex(([tokenName, _]) => tokenName === token);
+    const tokenDeployment = tokenDeployments[tokenIndex];
 
-  const poolUSD = await deployments.deploy("swap-mUSD", {
-    from: deployer,
-    contract: "SwapPool",
-    args: [
-      mUSD.address,
-      curve.address,
-      router.address,
-      backstop.address,
-      treasury.accountId,
-      "0xAmber mUSD Swap LP",
-      "mUSD-LP",
-    ],
-    log: true,
-  });
+    const curveIndex = curves.findIndex(([curveName, _]) => curveName === curve);
+    const curveDeployment = curveDeployments[curveIndex];
 
-  await registerSwapPool(deployments, { from: deployer, log: true }, mEUR.address, poolEUR.address);
-  await registerSwapPool(deployments, { from: deployer, log: true }, mETH.address, poolETH.address);
-  await registerSwapPool(deployments, { from: deployer, log: true }, mUSD.address, poolUSD.address);
+    const poolTokenDescription = deploymentDescription.tokens[token];
+
+    const deploymentName = `swap-${token}`;
+
+    const poolDeployment = await deployments.deploy(deploymentName, {
+      from: deployer,
+      contract: "SwapPool",
+      args: [
+        tokenDeployment.address,
+        curveDeployment.address,
+        router.address,
+        backstop.address,
+        treasuryAccount,
+        lpTokenName,
+        lpTokenSymbol,
+      ],
+      log: true,
+    });
+
+    await registerSwapPool(
+      deployments,
+      { from: deployer, log: true },
+      tokenDeployment.address,
+      poolDeployment.address,
+      insuranceFeeBasisPoints
+    );
+
+    const rawLpFee = Math.round(lpFeeBasisPoints * 100);
+    const rawBackstopFee = Math.round(backstopFeeBasisPoints * 100);
+    const rawProtocolFee = Math.round(protocolFeeBasisPoints * 100);
+    await setSwapFees(
+      deployments,
+      { from: deployer, log: true },
+      deploymentName,
+      rawLpFee,
+      rawBackstopFee,
+      rawProtocolFee
+    );
+
+    await setInsuranceWithdrawalTimelock(
+      deployments,
+      { from: deployer, log: true },
+      deploymentName,
+      insuranceWithdrawalTimelock
+    );
+
+    const rawPoolCap = BigInt(poolCapUnits) * 10n ** BigInt(poolTokenDescription.decimals);
+    await setPoolCap(deployments, { from: deployer, log: true }, deploymentName, rawPoolCap);
+
+    await setMaxCoverageRatio(
+      deployments,
+      { from: deployer, log: true },
+      deploymentName,
+      BigInt(maxCoverageRatioPercent)
+    );
+  }
 }
 
 DeploySwapPools.tags = ["swap-pools"];
 
-DeploySwapPools.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
-  const alreadyDeployed = Boolean(await deployments.getOrNull("swap-mETH"));
-  return alreadyDeployed;
+// eslint-disable-next-line @typescript-eslint/require-await
+DeploySwapPools.skip = async function skip(_: WasmDeployEnvironment): Promise<boolean> {
+  // the skip feature is not implemented yet in wasm-deploy
+  return false;
 };
 
 export default DeploySwapPools;

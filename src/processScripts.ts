@@ -151,6 +151,7 @@ export async function processScripts(
   network: Network,
   project: Project,
   chainApi: ChainApi<ContractSourcecodeId, DeployedContractId>,
+  deploymentName: string | undefined,
   updateDynamicText: (newLines: StyledText[]) => void,
   addStaticText: (lines: StyledText[], removeDynamicText: boolean) => void
 ) {
@@ -300,7 +301,7 @@ export async function processScripts(
       updateDisplayedStatus();
     };
 
-    const { result, execution } = await chainApi.messageCall({
+    const { result: maybeResult, execution } = await chainApi.messageCall({
       deploymentAddress: contract.address,
       messageArguments: rest,
       messageName: functionName,
@@ -308,6 +309,9 @@ export async function processScripts(
       submitter: submittersByAddress[tx.from.accountId],
       onReadyToSubmit: () => updateExecutionStatus("submitting"),
     });
+
+    // temporary fix until https://github.com/pendulum-chain/api-solang/issues/19 is resolved
+    const result = maybeResult!;
 
     if (execution.type === "extrinsic") {
       methodExecutionStatus.transactionFee = execution.transactionFee;
@@ -356,6 +360,7 @@ export async function processScripts(
       getNamedAccounts: async (): Promise<NamedAccounts> => namedAccounts,
       deployments: deploymentsForScript,
       network,
+      deploymentName,
     };
 
     if (script.default.skip !== undefined && (await script.default.skip(environmentForScript))) {

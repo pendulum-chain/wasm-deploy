@@ -29,7 +29,7 @@ export default async function (environment: TestSuiteEnvironment) {
     const balanceBefore = await asset2.balanceOf(tester);
     const path = makePath(asset1, asset2);
 
-    const quote = await router.getAmountOut(WITHDRAW_AMOUNT, path);
+    const [quote] = await router.getAmountOut(WITHDRAW_AMOUNT, path);
 
     // Check Swap event
     vm.expectEmit(router, "Swap", [tester, WITHDRAW_AMOUNT, quote, address(asset1), address(asset2), tester]);
@@ -139,14 +139,16 @@ export default async function (environment: TestSuiteEnvironment) {
       // it is hard to expect emit the correct value for ChargedSwapFees
       // as it is influences by slippage
       await swapPool2.setSwapFees(150, 50, 0);
-      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+      const [quoteWithFee, protocolFeeWithSlippage, effectiveLpFee, backstopFee] = await swapPool2.quoteSwapOut(
+        WITHDRAW_AMOUNT
+      );
+
+      assertEq(effectiveLpFee, (WITHDRAW_AMOUNT * 150n) / 1_000_000n, "Expected effective LP fee to be 0.015%");
+      assertEq(backstopFee, (WITHDRAW_AMOUNT * 50n) / 1_000_000n, "Expected backstop fee to be 0.005%");
+      assertEq(protocolFeeWithSlippage, 0n, "Expected protocol fee to be 0%");
 
       // Check ChargedSwapFees event
-      vm.expectEmit(swapPool1, "ChargedSwapFees", [
-        (WITHDRAW_AMOUNT * 150n) / 10000n,
-        (WITHDRAW_AMOUNT * 50n) / 10000n,
-        (WITHDRAW_AMOUNT * 0n) / 10000n,
-      ]);
+      vm.expectEmit(swapPool1, "ChargedSwapFees", [effectiveLpFee, backstopFee, protocolFeeWithSlippage]);
 
       vm.startPrank(address(router));
       // give enough funds to router to call contract functions
@@ -172,7 +174,7 @@ export default async function (environment: TestSuiteEnvironment) {
       );
       assertEq(
         liabilitiesAfter,
-        liabilitiesBefore + (WITHDRAW_AMOUNT * 150n) / 10000n,
+        liabilitiesBefore + (WITHDRAW_AMOUNT * 150n) / 1_000_000n,
         "Expected pool liabilities to increase by fee amount, so LP token worth increases"
       );
     },
@@ -186,12 +188,12 @@ export default async function (environment: TestSuiteEnvironment) {
       await changePoolCoverageTo(swapPool2, e(1.3, 18), environment);
       const [, liabilitiesBefore] = await swapPool2.coverage();
 
-      const quoteWithoutFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+      const [quoteWithoutFee] = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       // in this test we don't impose any lp fee because
       // this makes it easier to predict the other two fees
       await swapPool2.setSwapFees(0, 30, 20);
-      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+      const [quoteWithFee] = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       vm.startPrank(address(router));
       // give enough funds to router to call contract functions
@@ -226,7 +228,7 @@ export default async function (environment: TestSuiteEnvironment) {
       // should be more than (WITHDRAW_AMOUNT * 20) / 10000
       assertGt(
         treasuryAfter,
-        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 10000n,
+        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 1_000_000n,
         "Expected treasury balance to have increased by the amount of protocol fee charged"
       );
       assertEq(liabilitiesAfter, liabilitiesBefore, "Expected pool liabilities to stay the same");
@@ -241,12 +243,12 @@ export default async function (environment: TestSuiteEnvironment) {
       await changePoolCoverageTo(swapPool2, e(0.9, 18), environment);
       const [, liabilitiesBefore] = await swapPool2.coverage();
 
-      const quoteWithoutFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+      const [quoteWithoutFee] = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       // in this test we don't impose any lp fee because
       // this makes it easier to predict the other two fees
-      await swapPool2.setSwapFees(0, 30, 20);
-      const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
+      await swapPool2.setSwapFees(0, 3000, 2000);
+      const [quoteWithFee] = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       vm.startPrank(address(router));
       // give enough funds to router to call contract functions
@@ -452,14 +454,15 @@ export default async function (environment: TestSuiteEnvironment) {
 
       await changePoolCoverageTo(swapPool1, e(1.3, 18), environment);
       const poolBalance = await asset1.balanceOf(address(swapPool1));
-      const singleSwap = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
+      const [singleSwap] = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
 
       vm.startPrank(address(router));
       // give enough funds to router to call contract functions
       await vm.mintNative(address(router), unit(20));
       const firstHalf = await swapPool1.swapOutFromRouter((poolBalance * 3n) / 13n);
       vm.stopPrank();
-      const doubleSwap = firstHalf + (await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n));
+      const [secondHalf] = await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n);
+      const doubleSwap = firstHalf + secondHalf;
 
       assertApproxEqAbs(
         singleSwap,
@@ -474,12 +477,13 @@ export default async function (environment: TestSuiteEnvironment) {
 
       await changePoolCoverageTo(swapPool1, e(1.3, 18), environment);
       const poolBalance = await swapPool1.reserve();
-      const singleSwap = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
+      const [singleSwap] = await swapPool1.quoteSwapOut((poolBalance * 6n) / 13n);
 
-      const firstHalf = await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n);
+      const [firstHalf] = await swapPool1.quoteSwapOut((poolBalance * 3n) / 13n);
       await changePoolCoverageTo(swapPool1, e(1, 18), environment);
       const equiPoolBalance = await asset1.balanceOf(address(swapPool1));
-      const doubleSwap = firstHalf + (await swapPool1.quoteSwapOut((equiPoolBalance * 3n) / 10n));
+      const [secondHalf] = await swapPool1.quoteSwapOut((equiPoolBalance * 3n) / 10n);
+      const doubleSwap = firstHalf + secondHalf;
 
       assertEq(singleSwap, doubleSwap, "Expected swapped amount to be the same, no matter if done in one or two steps");
     },
