@@ -22,7 +22,12 @@
     },
     "ERC20Wrapper": {
       "repository": "pendulumWrappers",
-      "path": "erc20-wrapper/ERC20Wrapper.sol"
+      "path": "erc20-wrapper/ERC20Wrapper.sol",
+      "mutatingOverwrites": {
+        "balanceOf": false,
+        "totalSupply": false,
+        "allowance": false
+      }
     },
     "PriceOracleWrapper": {
       "repository": "pendulumWrappers",
