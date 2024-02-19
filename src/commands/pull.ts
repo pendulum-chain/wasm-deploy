@@ -35,10 +35,15 @@ export async function pull({ projectFolder }: PullOptions) {
     console.log(`Clone git ${git} for branch ${branch}`);
 
     await rm(gitClonePath, { recursive: true, force: true });
-    const gitCloneResult = await runCommand(["git", "clone", "-b", branch, git, gitClonePath]);
+    const gitCloneResult = await runCommand(["git", "clone", git, gitClonePath]);
 
     if (gitCloneResult.exitCode !== 0) {
       throw new Error(`Git error: ${gitCloneResult.stdout}, ${gitCloneResult.stderr}`);
+    }
+
+    const gitCheckoutResult = await runCommand(["git", "checkout", branch], { cwd: gitClonePath });
+    if (gitCheckoutResult.exitCode !== 0) {
+      throw new Error(`Git error: ${gitCheckoutResult.stdout}, ${gitCheckoutResult.stderr}`);
     }
 
     switch (init) {
