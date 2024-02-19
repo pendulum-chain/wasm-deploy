@@ -32,6 +32,9 @@ const validateContractSourceReference = object(
     importpaths: optional(array(string())),
     importmaps: optional(array(validateImportMap)),
     mutatingOverwrites: optional(objectMap(boolean())),
+    // the following is temporary workaround because Solang incorrectly labels overriden functions
+    // see https://matrix.to/#/!SerycSiSddhaCAXosD:parity.io/$98F3bOdGQ_QRaYQE82LQxEDy_q2WNyYM6yysNdbJdlk?via=parity.io&via=matrix.org
+    messageNameOverwrites: optional(objectMap(string())),
   },
   { allowExcessProperties: false }
 );

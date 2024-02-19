@@ -31,6 +31,7 @@ export async function compileContract(
 export interface MessageMetadata {
   mutates?: boolean;
   label?: string;
+  selector: string;
 }
 
 export interface MetadataFile {
@@ -120,12 +121,21 @@ async function actuallyCompileContract(
   metadata.source.hash = codeHexHash;
   metadata.source.wasm = hexContract;
 
-  const { mutatingOverwrites } = project.getContractConfiguration(contractId);
+  const { mutatingOverwrites, messageNameOverwrites } = project.getContractConfiguration(contractId);
   if (mutatingOverwrites !== undefined) {
     Object.entries(mutatingOverwrites).forEach(([messageLabel, mutates]) => {
       const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
       if (foundMessage !== undefined && mutates !== undefined) {
         foundMessage.mutates = mutates;
+      }
+    });
+  }
+
+  if (messageNameOverwrites !== undefined) {
+    Object.entries(messageNameOverwrites).forEach(([messageLabel, newLabel]) => {
+      const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
+      if (foundMessage !== undefined) {
+        foundMessage.label = newLabel;
       }
     });
   }
