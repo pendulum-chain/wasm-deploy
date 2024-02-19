@@ -7,6 +7,8 @@ To run these tests:
 - run foucoco-standalone from scratch locally
 - run our subsquid indexer from scratch locally
   - this requires some changes that allow to run the indexer locally
-  - `sqd down && sqd up && sqd process:foucoco`
+  - in the pendulum-squids project: `sqd down && sqd up && sqd process:local`
+- run the graphql server locally
+  - in the pendulum-squids project: `sqd serve`
 - run this test suite here
   - `npx ts-node src/index.ts test nabla-indexer --network local`
