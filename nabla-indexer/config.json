@@ -10,11 +10,17 @@
     },
     "BackstopPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/BackstopPool.sol"
+      "path": "contracts/src/core/BackstopPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "SwapPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/SwapPool.sol"
+      "path": "contracts/src/core/SwapPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "ERC20Wrapper": {
       "repository": "pendulumWrappers",
@@ -23,6 +29,15 @@
         "balanceOf": false,
         "totalSupply": false,
         "allowance": false
+      },
+      "messageNameOverwrites": {
+        "name_": "name",
+        "symbol_": "symbol",
+        "decimals_": "decimals",
+        "variant_": "variant",
+        "index_": "index",
+        "code_": "code",
+        "issuer_": "issuer"
       }
     },
     "MockOracle": {
