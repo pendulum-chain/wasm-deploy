@@ -63,6 +63,44 @@ export default async function (environment: TestSuiteEnvironment) {
       await genericTestOnlyOwnerCanSetPoolCap(pool, environment);
     },
 
+    async test_maxCoverageRatioForSwapIn_CheckDefaultValue() {
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 200n, "Unexpected default maxCoverageRatioForSwapIn");
+    },
+
+    async test_setMaxCoverageRatioForSwapIn_OnlyOwnerCanSetValue() {
+      vm.startPrank(CHARLIE);
+      vm.expectRevert("Ownable: caller is not the owner");
+      await pool.setMaxCoverageRatioForSwapIn(300n);
+      vm.stopPrank();
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 200n, "Unexpected maxCoverageRatioForSwapIn after set");
+
+      await pool.setMaxCoverageRatioForSwapIn(300n);
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 300n, "Unexpected maxCoverageRatioForSwapIn after set");
+    },
+
+    async test_quoteSwapInto_RevertsIfSwapInWouldExceedMaxCoverageRatio() {
+      await changePoolCoverageTo(pool, e(2, 18), environment);
+      vm.expectRevert("SwapPool: EXCEEDS_MAX_COVERAGE_RATIO");
+      await pool.quoteSwapInto(10);
+    },
+
+    async test_quoteSwapInto_UserCanGetQuoteUpToMaxCoverageRatio() {
+      const maxCoverageRatio: bigint = await pool.maxCoverageRatioForSwapIn();
+      const [totalLiabilities] = await pool.coverage();
+      const reserveWithSlippage = await pool.reserveWithSlippage();
+
+      const targetReserves = (maxCoverageRatio * totalLiabilities) / 100n;
+      const targetReservesWithSlippage = await nablaCurve.psi(
+        targetReserves,
+        totalLiabilities,
+        await pool.assetDecimals()
+      );
+
+      const swapInAmount = targetReservesWithSlippage - reserveWithSlippage;
+
+      await pool.quoteSwapInto(swapInAmount);
+    },
+
     async testOnlyOwnerCanSetSwapFee() {
       await pool.setSwapFees(40, 5, 5);
 
@@ -70,6 +108,11 @@ export default async function (environment: TestSuiteEnvironment) {
       vm.expectRevert("Ownable: caller is not the owner");
       await pool.setSwapFees(40, 5, 5);
       vm.stopPrank();
+    },
+
+    async testOwnerCannotSetSwapFeeAbove30Percent() {
+      vm.expectRevert("setSwapFees: FEES_TOO_HIGH");
+      await pool.setSwapFees(200000n, 50000n, 50000n);
     },
 
     async testOnlyOwnerCanSetWithdrawalTimelock() {

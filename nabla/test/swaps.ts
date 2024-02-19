@@ -143,9 +143,9 @@ export default async function (environment: TestSuiteEnvironment) {
 
       // Check ChargedSwapFees event
       vm.expectEmit(swapPool1, "ChargedSwapFees", [
-        (WITHDRAW_AMOUNT * 150n) / 10000n,
-        (WITHDRAW_AMOUNT * 50n) / 10000n,
-        (WITHDRAW_AMOUNT * 0n) / 10000n,
+        (WITHDRAW_AMOUNT * 150n) / 1_000_000n,
+        (WITHDRAW_AMOUNT * 50n) / 1_000_000n,
+        (WITHDRAW_AMOUNT * 0n) / 1_000_000n,
       ]);
 
       vm.startPrank(address(router));
@@ -172,7 +172,7 @@ export default async function (environment: TestSuiteEnvironment) {
       );
       assertEq(
         liabilitiesAfter,
-        liabilitiesBefore + (WITHDRAW_AMOUNT * 150n) / 10000n,
+        liabilitiesBefore + (WITHDRAW_AMOUNT * 150n) / 1_000_000n,
         "Expected pool liabilities to increase by fee amount, so LP token worth increases"
       );
     },
@@ -226,7 +226,7 @@ export default async function (environment: TestSuiteEnvironment) {
       // should be more than (WITHDRAW_AMOUNT * 20) / 10000
       assertGt(
         treasuryAfter,
-        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 10000n,
+        treasuryBefore + (WITHDRAW_AMOUNT * 20n) / 1_000_000n,
         "Expected treasury balance to have increased by the amount of protocol fee charged"
       );
       assertEq(liabilitiesAfter, liabilitiesBefore, "Expected pool liabilities to stay the same");
@@ -245,7 +245,7 @@ export default async function (environment: TestSuiteEnvironment) {
 
       // in this test we don't impose any lp fee because
       // this makes it easier to predict the other two fees
-      await swapPool2.setSwapFees(0, 30, 20);
+      await swapPool2.setSwapFees(0, 3000, 2000);
       const quoteWithFee = await swapPool2.quoteSwapOut(WITHDRAW_AMOUNT);
 
       vm.startPrank(address(router));

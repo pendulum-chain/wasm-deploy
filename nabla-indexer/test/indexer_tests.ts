@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { request, gql } from "graphql-request";
 
-import { assertEq, assertTrue, e, TestSuiteEnvironment } from "../../src/index";
+import { assertEq, assertTrue, e, TestContract, TestSuiteEnvironment } from "../../src/index";
 
 const MAX_UINT256 = 2n ** 256n - 1n;
 
@@ -23,6 +23,7 @@ interface IndexerSwapPools {
   feesHistory: IndexerFeesHistory[];
   symbol: string;
   token: IndexerToken;
+  apr: string;
 }
 
 interface IndexerBackstopPool {
@@ -34,6 +35,7 @@ interface IndexerBackstopPool {
   reserves: string;
   feesHistory: IndexerFeesHistory[];
   coveredSwapPools: { id: string }[];
+  apr: string;
 }
 
 interface IndexerFeesHistory {
@@ -106,8 +108,6 @@ async function readIndexer(): Promise<IndexerRouter[]> {
     }
   `;
   const result: { routers: IndexerRouter[] } = await request("http://localhost:4350/graphql", document);
-
-  console.log(JSON.stringify(result.routers, null, 2));
   return result.routers;
 }
 
@@ -161,7 +161,7 @@ export default async function (environment: TestSuiteEnvironment) {
       await vm.executeRootExtrinsic(mintExtrinsic);
     }
 
-    const oracles = [];
+    const oracles: TestContract[] = [];
     for (let i = 0; i <= noOfSwapPools; i++) {
       const oracle = await newMockOracle(address(assets[i]), unit(i + 1));
       oracles.push(oracle);
@@ -171,7 +171,7 @@ export default async function (environment: TestSuiteEnvironment) {
     const backstop = await newBackstopPool(address(router), address(assets[0]), "Backstop LP", "BLP");
 
     const TREASURY = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
-    const swapPools = [];
+    const swapPools: TestContract[] = [];
     for (let i = 1; i <= noOfSwapPools; i++) {
       const swapPool = await newSwapPool(
         address(assets[i]),
@@ -251,7 +251,6 @@ export default async function (environment: TestSuiteEnvironment) {
       assertEq(indexerSwapPool.totalSupply, swapPoolConfig.totalSupply);
       assertEq(indexerSwapPool.token.name, swapPoolConfig.tokenName);
 
-      console.log(address(swapPool));
       assertTrue(backstopPool.coveredSwapPools.find((pool) => pool.id === address(swapPool)) !== undefined);
     }
   };
@@ -259,9 +258,12 @@ export default async function (environment: TestSuiteEnvironment) {
   return {
     async setUp() {},
 
-    async _testStandard() {
+    async testStandard() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12), unit(13), unit(14)]);
-      const indexerRouters = (await readIndexerUntil((routers) => routers.length > 0, 3000))!;
+      const indexerRouters = (await readIndexerUntil(
+        (routers) => routers.length > 0 && routers[0].swapPools.length === 4,
+        3000
+      ))!;
       assertTrue(indexerRouters !== undefined);
       verifyIndexer(indexerRouters, instance, [
         {
@@ -295,7 +297,7 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
     },
 
-    async _testUnapprovedSwapPool() {
+    async testUnapprovedSwapPool() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -402,7 +404,7 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
     },
 
-    async _testReplaceSwapPool() {
+    async testReplaceSwapPool() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -576,7 +578,7 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
     },
 
-    async _testMultipleBackstopPools() {
+    async testMultipleBackstopPools() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -635,7 +637,7 @@ export default async function (environment: TestSuiteEnvironment) {
       assertTrue(extraIndexerBackstop.coveredSwapPools.some((pool) => pool.id === address(extraSwapPool)));
     },
 
-    async _testSwapPoolDepositsWithdrawals() {
+    async testSwapPoolDepositsWithdrawals() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -725,7 +727,7 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
     },
 
-    async _testBackstopPoolDepositsWithdrawals() {
+    async testBackstopPoolDepositsWithdrawals() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -793,7 +795,7 @@ export default async function (environment: TestSuiteEnvironment) {
       assertEq(backstopPool.totalSupply, "12000000000000");
     },
 
-    async _testSwaps() {
+    async testSwaps() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
@@ -870,17 +872,16 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
     },
 
-    async _testSwapFeeHistory() {
+    async testSwapFeeHistory() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
         (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
         3000
       ))!;
       assertTrue(indexerRouters !== undefined);
-      console.log(indexerRouters);
 
-      await instance.swapPools[0].setSwapFees(300, 150, 100);
-      await instance.swapPools[1].setSwapFees(200, 100, 70);
+      await instance.swapPools[0].setSwapFees(30000, 15000, 10000);
+      await instance.swapPools[1].setSwapFees(20000, 10000, 7000);
 
       await instance.router.swapExactTokensForTokens(
         unit(2),
@@ -923,11 +924,13 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
 
       let router = indexerRouters.find((router) => router.id === address(instance.router))!;
-      assertEq(router.swapPools[0].feesHistory.length, 0);
-      assertEq(router.swapPools[1].feesHistory.length, 1);
+      let indexerSwapPool0 = router.swapPools.find((pool) => pool.id === address(instance.swapPools[0]))!;
+      let indexerSwapPool1 = router.swapPools.find((pool) => pool.id === address(instance.swapPools[1]))!;
+      assertEq(indexerSwapPool0.feesHistory.length, 0);
+      assertEq(indexerSwapPool1.feesHistory.length, 1);
       assertEq(router.backstopPool[0].feesHistory.length, 1);
 
-      assertFeeHistoriesEqual(router.swapPools[1].feesHistory[0], feeHistory1);
+      assertFeeHistoriesEqual(indexerSwapPool1.feesHistory[0], feeHistory1);
       assertFeeHistoriesEqual(router.backstopPool[0].feesHistory[0], feeHistory1);
 
       await instance.router.swapExactTokensForTokens(
@@ -971,12 +974,14 @@ export default async function (environment: TestSuiteEnvironment) {
       ]);
 
       router = indexerRouters.find((router) => router.id === address(instance.router))!;
-      assertEq(router.swapPools[0].feesHistory.length, 1);
-      assertEq(router.swapPools[1].feesHistory.length, 1);
+      indexerSwapPool0 = router.swapPools.find((pool) => pool.id === address(instance.swapPools[0]))!;
+      indexerSwapPool1 = router.swapPools.find((pool) => pool.id === address(instance.swapPools[1]))!;
+      assertEq(indexerSwapPool0.feesHistory.length, 1);
+      assertEq(indexerSwapPool1.feesHistory.length, 1);
       assertEq(router.backstopPool[0].feesHistory.length, 2);
 
-      assertFeeHistoriesEqual(router.swapPools[0].feesHistory[0], feeHistory2);
-      assertFeeHistoriesEqual(router.swapPools[1].feesHistory[0], feeHistory1);
+      assertFeeHistoriesEqual(indexerSwapPool0.feesHistory[0], feeHistory2);
+      assertFeeHistoriesEqual(indexerSwapPool1.feesHistory[0], feeHistory1);
       assertFeeHistoriesEqual(router.backstopPool[0].feesHistory[0], feeHistory1);
       assertFeeHistoriesEqual(router.backstopPool[0].feesHistory[1], feeHistory2);
     },
@@ -1012,10 +1017,49 @@ export default async function (environment: TestSuiteEnvironment) {
               ?.swapPools.find((pool) => pool.id === address(instance.swapPools[1]))?.feesHistory.length === counter,
           3000
         ))!;
-        assertTrue(indexerRouters !== undefined);
+        const router = indexerRouters.find((router) => router.id === address(instance.router))!;
+        const swapPool = router.swapPools.find((pool) => pool.token.id === address(instance.assets[2]))!;
+        const backstopPool = router.backstopPool.find((pool) => pool.id === address(instance.backstop))!;
+        assertTrue(router !== undefined);
+        assertTrue(swapPool !== undefined);
+        assertTrue(backstopPool !== undefined);
+
+        const swapPoolTotalSupply = BigInt(swapPool.totalSupply);
+        const backstopPoolTotalSupply = BigInt(backstopPool.totalSupply);
+        const totalLpFees = swapPool.feesHistory.reduce((a, b) => a + BigInt(b.lpFees), 0n);
+        const totalBackstopFees = backstopPool.feesHistory.reduce((a, b) => a + BigInt(b.backstopFees), 0n);
+
+        assertEq(BigInt(swapPool.apr), (totalLpFees * 10n ** 12n * 365n) / 7n / swapPoolTotalSupply);
+        assertEq(BigInt(backstopPool.apr), (totalBackstopFees * 10n ** 12n * 365n) / 7n / backstopPoolTotalSupply);
       }
     },
 
-    // TODO SwapPoolUnregistered
+    async testSwapPoolUnregistered() {
+      const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
+      let indexerRouters = (await readIndexerUntil(
+        (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
+        3000
+      ))!;
+      assertTrue(indexerRouters !== undefined);
+
+      await instance.router.unregisterPool(address(instance.assets[1]));
+
+      indexerRouters = (await readIndexerUntil(
+        (routers) => routers.find((router) => router.id === address(instance.router))?.swapPools.length === 1,
+        3000
+      ))!;
+      assertTrue(indexerRouters !== undefined);
+      const router = indexerRouters.find((router) => router.id === address(instance.router))!;
+      assertEq(router.swapPools.length, 1);
+      assertEq(router.swapPools[0].id, address(instance.swapPools[1]));
+
+      await instance.router.unregisterPool(address(instance.assets[2]));
+
+      indexerRouters = (await readIndexerUntil(
+        (routers) => routers.find((router) => router.id === address(instance.router))?.swapPools.length === 0,
+        3000
+      ))!;
+      assertTrue(indexerRouters !== undefined);
+    },
   };
 }
