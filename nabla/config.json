@@ -6,7 +6,11 @@
     },
     "Router": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/Router.sol"
+      "path": "contracts/src/core/Router.sol",
+      "argumentNameOverwrites": {
+        "oracleByAsset": ["asset"],
+        "poolByAsset": ["asset"]
+      }
     },
     "NablaCurve": {
       "repository": "nablaCurve",

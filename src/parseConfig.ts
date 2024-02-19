@@ -35,6 +35,10 @@ const validateContractSourceReference = object(
     // the following is temporary workaround because Solang incorrectly labels overriden functions
     // see https://matrix.to/#/!SerycSiSddhaCAXosD:parity.io/$98F3bOdGQ_QRaYQE82LQxEDy_q2WNyYM6yysNdbJdlk?via=parity.io&via=matrix.org
     messageNameOverwrites: optional(objectMap(string())),
+    // the following is a workaround for message arguments that have an empty name
+    // as the generated code in the squid is erroneous
+    // empty message arguments happen, e.g., for public contract variables of type mapping
+    argumentNameOverwrites: optional(objectMap(array(string()))),
   },
   { allowExcessProperties: false }
 );
