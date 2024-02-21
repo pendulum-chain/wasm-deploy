@@ -66,6 +66,7 @@ async function readIndexer(): Promise<IndexerRouter[]> {
           totalLiabilities
           totalSupply
           apr
+          lpTokenDecimals
           feesHistory {
             backstopFees
             lpFees
@@ -91,6 +92,7 @@ async function readIndexer(): Promise<IndexerRouter[]> {
           symbol
           totalSupply
           apr
+          lpTokenDecimals
           reserves
           feesHistory {
             backstopFees
