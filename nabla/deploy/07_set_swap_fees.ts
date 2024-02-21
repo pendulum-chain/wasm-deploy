@@ -9,9 +9,9 @@ async function SetSwapFees({ getNamedAccounts, deployments }: WasmDeployEnvironm
       deployments,
       { from: deployer, log: true },
       swapPool,
-      15, // 0.15%
-      30, // 0.30%
-      5 // 0.05%
+      1500, // 0.15%
+      3000, // 0.30%
+      500 // 0.05%
     );
   }
 }
