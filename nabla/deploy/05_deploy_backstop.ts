@@ -3,16 +3,12 @@ import { WasmDeployEnvironment } from "../../src/index";
 async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
 
-  const [router, curve, mUSD] = await Promise.all([
-    deployments.get("router"),
-    deployments.get("amber-curve-0.0-0.01"),
-    deployments.get("mUSD"),
-  ]);
+  const [router, xcm1] = await Promise.all([deployments.get("router"), deployments.get("xcm1Erc20Wrapper")]);
 
   await deployments.deploy("backstop", {
     from: deployer,
     contract: "BackstopPool",
-    args: [router.address, mUSD.address, "0xAmber Backstop LP", "mUSD-BLP"],
+    args: [router.address, xcm1.address, "Nabla Backstop LP", "BS-LP"],
     log: true,
   });
 }
