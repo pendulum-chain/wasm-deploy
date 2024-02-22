@@ -5,69 +5,69 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
   const { deployer } = await getNamedAccounts();
   const treasury = deployer;
 
-  const [backstop, router, curve, mEUR, mETH, mUSD] = await Promise.all([
+  const [backstop, router, curve, native, xcm0, xcm1] = await Promise.all([
     deployments.get("backstop"),
     deployments.get("router"),
-    deployments.get("amber-curve-0.0-0.01"),
-    deployments.get("mEUR"),
-    deployments.get("mETH"),
-    deployments.get("mUSD"),
+    deployments.get("nablaCurve"),
+    deployments.get("nativeErc20Wrapper"),
+    deployments.get("xcm0Erc20Wrapper"),
+    deployments.get("xcm1Erc20Wrapper"),
   ]);
 
-  const poolEUR = await deployments.deploy("swap-mEUR", {
+  const poolNative = await deployments.deploy("swap-native", {
     from: deployer,
     contract: "SwapPool",
     args: [
-      mEUR.address,
+      native.address,
       curve.address,
       router.address,
       backstop.address,
       treasury.accountId,
-      "0xAmber mEUR Swap LP",
-      "mEUR-LP",
+      "Nabla Native Swap LP",
+      "Native-LP",
     ],
     log: true,
   });
 
-  const poolETH = await deployments.deploy("swap-mETH", {
+  const poolXcm0 = await deployments.deploy("swap-xcm0", {
     from: deployer,
     contract: "SwapPool",
     args: [
-      mETH.address,
+      xcm0.address,
       curve.address,
       router.address,
       backstop.address,
       treasury.accountId,
-      "0xAmber mETH Swap LP",
-      "mETH-LP",
+      "Nabla Xcm0 Swap LP",
+      "XCM0-LP",
     ],
     log: true,
   });
 
-  const poolUSD = await deployments.deploy("swap-mUSD", {
+  const poolXcm1 = await deployments.deploy("swap-xcm1", {
     from: deployer,
     contract: "SwapPool",
     args: [
-      mUSD.address,
+      xcm1.address,
       curve.address,
       router.address,
       backstop.address,
       treasury.accountId,
-      "0xAmber mUSD Swap LP",
-      "mUSD-LP",
+      "Nabla Xcm1 Swap LP",
+      "XCM1-LP",
     ],
     log: true,
   });
 
-  await registerSwapPool(deployments, { from: deployer, log: true }, mEUR.address, poolEUR.address);
-  await registerSwapPool(deployments, { from: deployer, log: true }, mETH.address, poolETH.address);
-  await registerSwapPool(deployments, { from: deployer, log: true }, mUSD.address, poolUSD.address);
+  await registerSwapPool(deployments, { from: deployer, log: true }, native.address, poolNative.address);
+  await registerSwapPool(deployments, { from: deployer, log: true }, xcm0.address, poolXcm0.address);
+  await registerSwapPool(deployments, { from: deployer, log: true }, xcm1.address, poolXcm1.address);
 }
 
 DeploySwapPools.tags = ["swap-pools"];
 
 DeploySwapPools.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
-  const alreadyDeployed = Boolean(await deployments.getOrNull("swap-mETH"));
+  const alreadyDeployed = Boolean(await deployments.getOrNull("swap-native"));
   return alreadyDeployed;
 };
 
