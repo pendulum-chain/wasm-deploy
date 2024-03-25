@@ -321,11 +321,22 @@ export async function processScripts(
       });
     }
 
-    if (result.type === "error") {
-      methodExecutionStatus.failure = result.error;
-      updateExecutionStatus("failure", undefined);
-    } else {
-      updateExecutionStatus("success", undefined);
+    switch (result.type) {
+      case "error":
+        methodExecutionStatus.failure = result.error;
+        updateExecutionStatus("failure", undefined);
+        break;
+      case "panic":
+        methodExecutionStatus.failure = result.explanation;
+        updateExecutionStatus("failure", undefined);
+        break;
+      case "reverted":
+        methodExecutionStatus.failure = result.description;
+        updateExecutionStatus("failure", undefined);
+        break;
+      case "success":
+        updateExecutionStatus("success", undefined);
+        break;
     }
   };
 
