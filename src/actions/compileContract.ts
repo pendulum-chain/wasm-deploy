@@ -68,7 +68,7 @@ async function actuallyCompileContract(
 
   updateContractStatus("compiling");
   const solangResult = await runCommand([
-    "../clones/solang/target/release/solang",
+    "/Users/gianni/Downloads/solang-mac-arm",
     "compile",
     "--no-strength-reduce", // temporary fix for https://github.com/hyperledger/solang/issues/1507
     "--target",

@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
-import { TestSuiteEnvironment } from "../../src/index";
-import { assertEq } from "../../src/index";
+import { TestSuiteEnvironment } from "../src/index";
+import { assertEq } from "../src/index";
 
 const BOB = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
 

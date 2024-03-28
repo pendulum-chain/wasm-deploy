@@ -89,7 +89,7 @@
           "suri": "//AltoParaíso"
         }
       },
-      "rpcUrl": "ws://127.0.0.1:9944"
+      "rpcUrl": "ws://127.0.0.1:8000"
     }
   },
   "tests": {

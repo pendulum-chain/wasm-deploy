@@ -185,6 +185,9 @@ export async function messageCall({
     messageArguments,
   });
 
+  console.log("messageCall", messageName)
+  console.log("output",output)
+
   switch (output.type) {
     case "reverted":
       return { execution: { type: "onlyQuery" }, result: output };
