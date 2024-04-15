@@ -14,7 +14,7 @@ async function DeployCurves({ getNamedAccounts, deployments }: WasmDeployEnviron
 DeployCurves.tags = ["curves"];
 
 DeployCurves.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
-  const alreadyDeployed = Boolean(await deployments.getOrNull("NablaCurve"));
+  const alreadyDeployed = Boolean(await deployments.getOrNull("nablaCurve"));
   return alreadyDeployed;
 };
 

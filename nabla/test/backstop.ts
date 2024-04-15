@@ -68,6 +68,7 @@ export default async function (environment: TestSuiteEnvironment) {
     async setUp() {
       router = await newRouter();
       backstop = await newTestableBackstopPool(address(router), address(usd), "Test Backstop LP", "BLP");
+
       swapPool1 = await newTestableSwapPool(
         address(asset1),
         address(nablaCurve),

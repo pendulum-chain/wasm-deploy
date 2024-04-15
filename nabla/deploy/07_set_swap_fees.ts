@@ -4,7 +4,7 @@ import { setSwapFees } from "../_lib";
 async function SetSwapFees({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
 
-  for (const swapPool of ["swap-native", "swap-xcm0", "swap-xcm1"]) {
+  for (const swapPool of ["swap-native", "swap-xcm0", "swap-xcm1", "swap-xcm2", "swap-xcm3"]) {
     await setSwapFees(
       deployments,
       { from: deployer, log: true },

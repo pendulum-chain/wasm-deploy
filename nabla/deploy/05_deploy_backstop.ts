@@ -8,7 +8,7 @@ async function DeployBackstopPool({ getNamedAccounts, deployments }: WasmDeployE
   await deployments.deploy("backstop", {
     from: deployer,
     contract: "BackstopPool",
-    args: [router.address, xcm1.address, "Nabla Backstop LP", "BS-LP"],
+    args: [router.address, xcm1.address, "Nabla Backstop LP", "BSP-LP"],
     log: true,
   });
 }

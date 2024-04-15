@@ -85,7 +85,7 @@
   "repositories": {
     "nablaContracts": {
       "git": "https://github.com/0xamberhq/contracts.git",
-      "branch": "3e96787e161fb2657c90f18034691749647b691f",
+      "branch": "pendulum-launch",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
@@ -95,7 +95,7 @@
       "init": "yarn"
     },
     "pendulumWrappers": {
-      "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
+      "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
       "branch": "master"
     }
   },
