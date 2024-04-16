@@ -42,6 +42,8 @@ export default async function (environment: TestSuiteEnvironment) {
   const PRICE_ASSET2 = unit(2);
   const PRICE_USD = unit(1);
 
+  const TIMELOCK = 1000;
+
   const usd = await newTestableERC20Wrapper("Test Backstop Token", "USD", 12, [1], [1], [], []);
   const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 12, [1], [2], [], []);
   const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 12, [1], [3], [], []);
@@ -325,7 +327,7 @@ export default async function (environment: TestSuiteEnvironment) {
 
       const [lpTokens] = await pool.deposit(unit(10));
 
-      await vm.roll(1001);
+      await vm.roll(TIMELOCK + 1);
       vm.expectRevert("redeemSwapPoolShares():NO_COVER");
 
       // TODO: the original test uses address(swapPoolUsd) instead of address(pool)
@@ -382,8 +384,18 @@ export default async function (environment: TestSuiteEnvironment) {
       const backstopReservesBefore = await usd.balanceOf(address(backstop));
       const backstopLiabBefore = await backstop.totalSupply();
 
+      const quoteBackstopDrain = await swapPool1.quoteBackstopDrain(expectedReserveDecrement);
+
+      // Check BackstopDrain event
+      vm.expectEmit(swapPool1, "BackstopDrain", [tester, quoteBackstopDrain]);
+
       // Check WithdrawSwapLiquidity event
-      vm.expectEmit(backstop, "WithdrawSwapLiquidity", [tester, address(swapPool1), 2007413146409n, sharesToWithdraw]);
+      vm.expectEmit(backstop, "WithdrawSwapLiquidity", [
+        tester,
+        address(swapPool1),
+        quoteBackstopDrain,
+        sharesToWithdraw,
+      ]);
 
       const amountWithdrawn = await backstop.withdrawExcessSwapLiquidity(address(swapPool1), sharesToWithdraw, unit(2));
 
@@ -398,12 +410,20 @@ export default async function (environment: TestSuiteEnvironment) {
         balanceBefore + amountWithdrawn,
         "Caller should receive the number of swap pool tokens returned by the call"
       );
-      assertApproxEqAbs(await backstop.balanceOf(tester), lpTokens / 2n, 1n);
-      assertEq(await swapPool1.balanceOf(tester), 0n);
+      assertApproxEqAbs(await backstop.balanceOf(tester), sharesToWithdraw, 1n, "Unexpected backstop shares");
+      assertEq(await swapPool1.balanceOf(tester), 0n, "Unexpected swap pool shares");
 
-      assertEq(await backstop.totalSupply(), backstopLiabBefore - sharesToWithdraw);
-      assertEq(await swapPool1.totalLiabilities(), liability1);
-      assertEq(await usd.balanceOf(address(backstop)), backstopReservesBefore);
+      assertEq(
+        await backstop.totalSupply(),
+        backstopLiabBefore - sharesToWithdraw,
+        "Backstop liabilities have not decreased as expected"
+      );
+      assertEq(await swapPool1.totalLiabilities(), liability1, "Swap pool liabilities should not have changed");
+      assertEq(
+        await usd.balanceOf(address(backstop)),
+        backstopReservesBefore,
+        "Backstop reserves should not have changed"
+      );
     },
 
     async testBackstopWithdrawalInExcessSwapLiquidityOnly() {
@@ -428,7 +448,7 @@ export default async function (environment: TestSuiteEnvironment) {
       const [backstopReservesBefore, backstopLiabBefore] = await coverage();
       const [swapReservesBefore, swapLiabBefore] = await swapPool2.coverage();
 
-      await vm.roll(1001);
+      await vm.roll(TIMELOCK + 1);
 
       // Check CoverSwapWithdrawal event
       vm.expectEmit(backstop, "CoverSwapWithdrawal", [
@@ -470,7 +490,7 @@ export default async function (environment: TestSuiteEnvironment) {
       const lpTokens1 = await swapPool1.balanceOf(tester);
       const lpTokens2 = await swapPool2.balanceOf(tester);
 
-      await vm.roll(1001);
+      await vm.roll(TIMELOCK + 1);
 
       vm.expectRevert("SwapPool#backstopBurn():INSUFFICIENT_COVERAGE");
       await backstop.redeemSwapPoolShares(address(swapPool1), lpTokens1 / 4n, 0);
@@ -479,25 +499,24 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens2 / 4n, 0);
     },
 
-    // ! SKIPPED !
-    async skipTestSwapPoolBackstopWithdrawalTimeLock() {
-      await depositInto(swapPool1, unit(10));
-      await changePoolCoverageTo(swapPool1, e(0.7, 18), environment);
+    async test_redeemSwapPoolShares_RevertIfWithdrawalTimeLockIsStillActive() {
+      await depositInto(swapPool2, unit(10));
+      await changePoolCoverageTo(swapPool2, e(0.7, 18), environment);
+
       const lpTokens = await swapPool2.balanceOf(tester);
+      const withdrawAmount = lpTokens / 4n;
 
       vm.expectRevert("SwapPool#backstopBurn: TIMELOCK");
-      await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens / 4n, 0);
+      await backstop.redeemSwapPoolShares(address(swapPool2), withdrawAmount, 0);
 
-      await vm.roll(1000);
-
-      vm.expectRevert("SwapPool#backstopBurn: TIMELOCK");
-      await backstop.redeemSwapPoolShares(address(swapPool2), lpTokens / 4n, 0);
+      await vm.roll(TIMELOCK);
+      await backstop.redeemSwapPoolShares(address(swapPool2), withdrawAmount, 0);
     },
 
     async testPreventsPausedSwapPoolBackstopWithdrawal() {
       await depositInto(swapPool2, unit(20));
       await changePoolCoverageTo(swapPool2, e(0.8, 18), environment);
-      await vm.roll(1001);
+      await vm.roll(TIMELOCK);
       await swapPool2.pause();
 
       const shares = await swapPool2.balanceOf(tester);
