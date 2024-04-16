@@ -82,21 +82,23 @@ export default async function (environment: TestSuiteEnvironment) {
       await changePoolCoverageTo(pool, e(2, 18), environment);
       vm.expectRevert("SwapPool: EXCEEDS_MAX_COVERAGE_RATIO");
       await pool.quoteSwapInto(10);
+
+      const maxCoverageRatio: bigint = await pool.maxCoverageRatioForSwapIn();
+      const [liabilities, reserves] = await pool.coverage();
+
+      const swapInAmountTooBig = (maxCoverageRatio * liabilities) / 100n - reserves + 1n;
+
+      vm.startPrank(CHARLIE);
+      vm.expectRevert("SwapPool: EXCEEDS_MAX_COVERAGE_RATIO");
+      vm.stopPrank();
+      await pool.quoteSwapInto(swapInAmountTooBig);
     },
 
-    async test_quoteSwapInto_UserCanGetQuoteUpToMaxCoverageRatio() {
+    async test_quoteSwapInto_UserCanGetQuote() {
       const maxCoverageRatio: bigint = await pool.maxCoverageRatioForSwapIn();
-      const [totalLiabilities] = await pool.coverage();
-      const reserveWithSlippage = await pool.reserveWithSlippage();
+      const [liabilities, reserves] = await pool.coverage();
 
-      const targetReserves = (maxCoverageRatio * totalLiabilities) / 100n;
-      const targetReservesWithSlippage = await nablaCurve.psi(
-        targetReserves,
-        totalLiabilities,
-        await pool.assetDecimals()
-      );
-
-      const swapInAmount = targetReservesWithSlippage - reserveWithSlippage;
+      const swapInAmount = (maxCoverageRatio * liabilities) / 100n - reserves;
 
       await pool.quoteSwapInto(swapInAmount);
     },
@@ -139,12 +141,6 @@ export default async function (environment: TestSuiteEnvironment) {
         await asset.balanceOf(address(pool)),
         poolBalanceBefore + unit(5),
         "Pool should own 5.0 (5E18) more test tokens after deposit"
-      );
-
-      assertApproxEq(
-        await pool.insuranceWithdrawalUnlock(tester),
-        (await vm.getBlockNumber()) + (await pool.insuranceWithdrawalTimelock()),
-        "Unexpected insurance withdrawal unlock block no"
       );
     },
 

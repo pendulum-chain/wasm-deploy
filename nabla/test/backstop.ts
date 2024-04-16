@@ -149,7 +149,7 @@ export default async function (environment: TestSuiteEnvironment) {
     },
 
     async testPreventsDuplicateSwapPool() {
-      vm.expectRevert("addSwapPool():DUPLICATE_SWAP_POOL");
+      vm.expectRevert("addSwapPool():DUPLICATE");
       await backstop.addSwapPool(address(swapPool1), 0);
     },
 
