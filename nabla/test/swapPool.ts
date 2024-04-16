@@ -13,6 +13,9 @@ import { changePoolCoverageTo } from "./lib/swapPoolTests";
 const CHARLIE = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
 const FERDIE = "6hXHGkma9bKW6caAA5Z9Pto8Yxh9BbD8ckE15hSAhbMdF7RC";
 
+const PROTOCOL_TREASURY = "6n5dP3mHz2N6rGwgqPpr9YMFdGAwi7Chko7aTpFifv44hPLL";
+const ATTACKER = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
+
 export default async function (environment: TestSuiteEnvironment) {
   const {
     address,
@@ -28,7 +31,15 @@ export default async function (environment: TestSuiteEnvironment) {
   const nablaCurve = await newNablaCurve(0, e(0.01, 18));
 
   const asset = await newTestableERC20Wrapper("Test Token", "TEST", 12, [1], [1], [], []);
-  const pool = await newTestableSwapPool(address(asset), address(nablaCurve), 0, 0, 0, "Test LP Token", "LP");
+  const pool = await newTestableSwapPool(
+    address(asset),
+    address(nablaCurve),
+    0,
+    0,
+    PROTOCOL_TREASURY,
+    "Test LP Token",
+    "LP"
+  );
 
   return {
     async setUp() {
@@ -53,6 +64,14 @@ export default async function (environment: TestSuiteEnvironment) {
       await asset.approve(address(pool), unit(1));
       await pool.deposit(unit(1));
       vm.stopPrank();
+    },
+
+    async test_setUp_ProtocolTreasuryIsSet() {
+      assertEq(
+        ((await pool.protocolTreasury()) as any).toString(),
+        PROTOCOL_TREASURY,
+        "Unexpected protocol treasury address"
+      );
     },
 
     async testPoolCap() {
@@ -257,6 +276,41 @@ export default async function (environment: TestSuiteEnvironment) {
 
       const [shares] = await pool.deposit(unit(5));
       assertApproxEq(await pool.sharesTargetWorth(shares), unit(5), "Expected shareTargetWorth() to match deposit");
+    },
+
+    /**
+     * Test: setProtocolTreasury
+     */
+    async test_setProtocolTreasury_RevertIfSenderIsNotOwner() {
+      vm.startPrank(ATTACKER);
+      vm.expectRevert("Ownable: caller is not the owner");
+      await pool.setProtocolTreasury(ATTACKER);
+      vm.stopPrank();
+    },
+
+    async test_setProtocolTreasury_RevertIfAddressIsZeroAddress() {
+      vm.expectRevert("setProtocolTreasury: ZERO_ADDRESS");
+      await pool.setProtocolTreasury(0);
+    },
+
+    async test_setProtocolTreasury_RevertIfAddressIsEqualToCurrentTreasury() {
+      vm.expectRevert("setProtocolTreasury: NO_CHANGE");
+      await pool.setProtocolTreasury(PROTOCOL_TREASURY);
+    },
+
+    async test_setProtocolTreasury_Success() {
+      const newTreasury = "6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr";
+
+      vm.expectEmit(pool, "ProtocolTreasuryChanged", [tester, newTreasury]);
+
+      const returned = await pool.setProtocolTreasury(newTreasury);
+
+      assertEq(
+        ((await pool.protocolTreasury()) as any).toString(),
+        newTreasury,
+        "Unexpected protocol treasury address"
+      );
+      assertTrue(returned, "Expected setProtocolTreasury() to return true");
     },
   };
 }
