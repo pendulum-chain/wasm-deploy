@@ -129,10 +129,10 @@ export default async function (environment: TestSuiteEnvironment) {
     async testDeposit() {
       const poolBalanceBefore = await asset.balanceOf(address(pool));
 
-      const [simulatedShares] = await pool.simulateDeposit(unit(5));
+      const depositQuote = await pool.quoteDeposit(unit(5));
 
       // Check Mint event
-      vm.expectEmit(pool, "Mint", [tester, simulatedShares, unit(5)]);
+      vm.expectEmit(pool, "Mint", [tester, depositQuote, unit(5)]);
 
       await pool.deposit(unit(5));
 
@@ -147,15 +147,22 @@ export default async function (environment: TestSuiteEnvironment) {
     async testWithdrawal() {
       await pool.deposit(unit(5));
 
+      const assetAmountBefore = await asset.balanceOf(tester);
+
       const sharesBefore = await pool.balanceOf(tester);
       const poolBalanceBefore = await asset.balanceOf(address(pool));
-      const [simulatedPayout] = await pool.simulateWithdrawal(unit(3));
+      const withdrawQuote = await pool.quoteWithdraw(unit(3));
 
       // Check Burn event
-      vm.expectEmit(pool, "Burn", [tester, unit(3), simulatedPayout]);
+      vm.expectEmit(pool, "Burn", [tester, unit(3), withdrawQuote]);
 
       await pool.withdraw(unit(3), unit(3));
 
+      assertEq(
+        await asset.balanceOf(tester),
+        assetAmountBefore + withdrawQuote,
+        "LP should own 3.0 (3E18) more test tokens after withdrawal"
+      );
       assertEq(
         await pool.balanceOf(tester),
         sharesBefore - unit(3),
@@ -163,7 +170,7 @@ export default async function (environment: TestSuiteEnvironment) {
       );
       assertEq(
         await asset.balanceOf(address(pool)),
-        poolBalanceBefore - simulatedPayout,
+        poolBalanceBefore - withdrawQuote,
         "Pool should own 3.0 (3E18) less test tokens after withdrawal"
       );
     },

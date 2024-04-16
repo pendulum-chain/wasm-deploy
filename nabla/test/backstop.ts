@@ -13,6 +13,7 @@ import { changePoolCoverageTo } from "./lib/swapPoolTests";
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 const BOB = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
+const ATTACKER = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
 
 export default async function (environment: TestSuiteEnvironment) {
   const {
@@ -44,6 +45,7 @@ export default async function (environment: TestSuiteEnvironment) {
   const usd = await newTestableERC20Wrapper("Test Backstop Token", "USD", 12, [1], [1], [], []);
   const asset1 = await newTestableERC20Wrapper("Test Token 1", "TEST1", 12, [1], [2], [], []);
   const asset2 = await newTestableERC20Wrapper("Test Token 2", "TEST2", 12, [1], [3], [], []);
+  const asset3 = await newTestableERC20Wrapper("Test Token 3", "TEST3", 12, [1], [4], [], []);
 
   const oracleUsd = await newMockOracle(address(usd), PRICE_USD);
   const oracle1 = await newMockOracle(address(asset1), PRICE_ASSET1);
@@ -153,7 +155,97 @@ export default async function (environment: TestSuiteEnvironment) {
       await backstop.addSwapPool(address(swapPool1), 0);
     },
 
-    async testCanAddSwapPoolOfSameToken() {
+    /**
+     * addSwapPool(address _swapPool, uint256 _insuranceFeeBps)
+     */
+    async test_addSwapPool_RevertIfMsgSenderIsNotOwner() {
+      const pool = await newSwapPool(
+        address(asset3),
+        address(nablaCurve),
+        address(router),
+        address(backstop),
+        0,
+        "Test LP 3",
+        "LP3"
+      );
+
+      vm.expectRevert("Ownable: caller is not the owner");
+      vm.startPrank(ATTACKER);
+      await backstop.addSwapPool(address(pool), 0);
+      vm.stopPrank();
+    },
+
+    async test_addSwapPool_RevertIfSwapPoolIsZeroAddress() {
+      vm.expectRevert("addSwapPool():ZERO_ADDRESS");
+      await backstop.addSwapPool(0, 0);
+    },
+
+    async test_addSwapPool_RevertIfSwapPoolIsDuplicate() {
+      vm.expectRevert("addSwapPool():DUPLICATE");
+      await backstop.addSwapPool(address(swapPool1), 0);
+    },
+
+    async test_addSwapPool_RevertIfExcessiveFeeIsSet() {
+      const pool = await newSwapPool(
+        address(asset3),
+        address(nablaCurve),
+        address(router),
+        address(backstop),
+        0,
+        "Test LP 3",
+        "LP3"
+      );
+
+      vm.expectRevert("_setInsuranceFee():EXCESSIVE_FEE");
+      await backstop.addSwapPool(address(pool), 30_01); // revert if > 30%
+    },
+
+    async test_addSwapPool_RevertIfBackstopPoolMismatch() {
+      const differentBackstopPool = await newTestableBackstopPool(
+        address(router),
+        address(usd),
+        "Test Backstop LP",
+        "BLP"
+      );
+
+      const pool = await newSwapPool(
+        address(asset3),
+        address(nablaCurve),
+        address(router),
+        address(differentBackstopPool),
+        0,
+        "Test LP 3",
+        "LP3"
+      );
+
+      vm.expectRevert("addSwapPool():BACKSTOP_MISMATCH");
+      await backstop.addSwapPool(address(pool), 0);
+    },
+
+    async test_addSwapPool_EventsAreEmittedAndReturnsTrue() {
+      const pool = await newSwapPool(
+        address(asset3),
+        address(nablaCurve),
+        address(router),
+        address(backstop),
+        0,
+        "Test LP 3",
+        "LP3"
+      );
+
+      const insuranceFeeBps = 0n;
+
+      // Check InsuranceFeeSet event
+      vm.expectEmit(backstop, "InsuranceFeeSet", [tester, address(pool), insuranceFeeBps]);
+
+      // Check SwapPoolAdded event
+      vm.expectEmit(backstop, "SwapPoolAdded", [tester, address(pool)]);
+
+      const response = await backstop.addSwapPool(address(pool), 0);
+      assertEq(response, true, "Expected true");
+    },
+
+    async test_addSwapPool_OwnerCanAddSwapPoolOfSameTokenAsBackstopPoolToken() {
       const pool = await newSwapPool(
         address(usd),
         address(nablaCurve),
