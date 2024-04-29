@@ -22,7 +22,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@pendulum-chain/api-solang": "0.0.7",
+    "@pendulum-chain/api-solang": "=0.2.0",
     "@polkadot/api": "^10.9.1",
     "@polkadot/api-contract": "^10.9.1",
     "@polkadot/keyring": "^12.3.2",
@@ -35,8 +35,5 @@
     "fefe": "^3.2.0",
     "prompts": "^2.4.2",
     "ts-node": "^10.9.1"
-  },
-  "workspaces": [
-    "packages/api-solang"
-  ]
+  }
 }
