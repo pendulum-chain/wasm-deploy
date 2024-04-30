@@ -61,7 +61,7 @@ export async function pull({ projectFolder }: PullOptions) {
       case "yarn": {
         console.log(`  Run yarn install`);
         try {
-          const yarnResult = await runCommand(["yarn", "install", "--ignore-engines"], { cwd: gitClonePath });
+          const yarnResult = await runCommand(["yarn", "install"], { cwd: gitClonePath });
           if (yarnResult.exitCode !== 0) {
             throw new Error(`Yarn error: ${yarnResult.stdout}, ${yarnResult.stderr}`);
           }
