@@ -5,8 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "tsx src/index.ts",
-    "pull-nabla": "tsx src/index.ts pull nabla",
-    "deploy-foucoco": "tsx src/index.ts deploy nabla --network foucoco"
+    "pull:nabla": "tsx src/index.ts pull nabla",
+    "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco",
+    "deploy:local": "tsx src/index.ts deploy nabla --network local"
   },
   "keywords": [],
   "author": "",
