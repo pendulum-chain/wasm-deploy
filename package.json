@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "tsx src/index.ts",
+    "pull-nabla": "tsx src/index.ts pull nabla",
+    "deploy-foucoco": "tsx src/index.ts deploy nabla --network foucoco"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +21,7 @@
     "eslint": "^8.49.0",
     "graphql": "^16.8.1",
     "graphql-request": "^6.1.0",
+    "tsx": "^4.7.3",
     "typescript": "^5.2.2"
   },
   "dependencies": {
