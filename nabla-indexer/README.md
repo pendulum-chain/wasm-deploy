@@ -11,4 +11,4 @@ To run these tests:
 - run the graphql server locally
   - in the pendulum-squids project: `sqd serve`
 - run this test suite here
-  - `npx ts-node src/index.ts test nabla-indexer --network local`
+  - `npx tsx src/index.ts test nabla-indexer --network local`

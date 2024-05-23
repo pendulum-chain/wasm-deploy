@@ -119,13 +119,14 @@ async function readIndexerUntil(
 ): Promise<IndexerRouter[] | undefined> {
   const startTime = Date.now();
 
+  await new Promise((resolve) => setTimeout(resolve, 1000));
   while (Date.now() - startTime < maxTimeoutMs) {
     const indexerRouters = await readIndexer();
     if (condition(indexerRouters)) {
       return indexerRouters;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   return undefined;
 }
@@ -263,7 +264,10 @@ export default async function (environment: TestSuiteEnvironment) {
     async testStandard() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12), unit(13), unit(14)]);
       const indexerRouters = (await readIndexerUntil(
-        (routers) => routers.length > 0 && routers[0].swapPools.length === 4,
+        (routers) =>
+          routers.length > 0 &&
+          routers[0].swapPools.length === 4 &&
+          routers[0].swapPools[3].reserve === "14000000000000",
         3000
       ))!;
       assertTrue(indexerRouters !== undefined);
@@ -302,7 +306,9 @@ export default async function (environment: TestSuiteEnvironment) {
     async testUnapprovedSwapPool() {
       const instance = await createNablaInstance(unit(10), [unit(11), unit(12)]);
       let indexerRouters = (await readIndexerUntil(
-        (routers) => routers.find((router) => router.id === address(instance.router)) !== undefined,
+        (routers) =>
+          routers.find((router) => router.id === address(instance.router)) !== undefined &&
+          routers[0].swapPools[1].reserve === "12000000000000",
         3000
       ))!;
       assertTrue(indexerRouters !== undefined);

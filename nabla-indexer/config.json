@@ -63,7 +63,7 @@
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
-      "branch": "master"
+      "branch": "5c8dacd274f8bc4d8ba0e448bce1cfb09b58325d"
     }
   },
   "networks": {
