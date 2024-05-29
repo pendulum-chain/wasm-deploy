@@ -25,8 +25,8 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
       router.address,
       backstop.address,
       treasury.accountId,
-      "Nabla Native Swap LP",
-      "Native-LP",
+      "AMPE Swap LP",
+      "AMPE-LP",
     ],
     log: true,
   });
@@ -40,8 +40,8 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
       router.address,
       backstop.address,
       treasury.accountId,
-      "Nabla Xcm0 Swap LP",
-      "XCM0-LP",
+      "USDC Swap LP",
+      "USDC-LP",
     ],
     log: true,
   });
@@ -49,15 +49,7 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
   const poolXcm1 = await deployments.deploy("swap-xcm1", {
     from: deployer,
     contract: "SwapPool",
-    args: [
-      xcm1.address,
-      curve.address,
-      router.address,
-      backstop.address,
-      treasury.accountId,
-      "Nabla Xcm1 Swap LP",
-      "XCM1-LP",
-    ],
+    args: [xcm1.address, curve.address, router.address, backstop.address, treasury.accountId, "BRL Swap LP", "BRL-LP"],
     log: true,
   });
 
@@ -70,8 +62,8 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
       router.address,
       backstop.address,
       treasury.accountId,
-      "Nabla Xcm2 Swap LP",
-      "XCM2-LP",
+      "EURC Swap LP",
+      "EURC-LP",
     ],
     log: true,
   });
@@ -85,8 +77,8 @@ async function DeploySwapPools({ getNamedAccounts, deployments }: WasmDeployEnvi
       router.address,
       backstop.address,
       treasury.accountId,
-      "Nabla Xcm3 Swap LP",
-      "XCM3-LP",
+      "USDT Swap LP",
+      "USDT-LP",
     ],
     log: true,
   });

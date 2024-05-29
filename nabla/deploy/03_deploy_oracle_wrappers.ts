@@ -18,10 +18,10 @@ async function DeployMockOracles({ getNamedAccounts, deployments }: WasmDeployEn
     args: [
       [
         { asset: native.address, blockchain: "Native", symbol: "NAT" },
-        { asset: xcm0.address, blockchain: "XCM0", symbol: "X0" },
-        { asset: xcm1.address, blockchain: "XCM1", symbol: "X1" },
-        { asset: xcm2.address, blockchain: "Polkadot", symbol: "DOT" },
-        { asset: xcm3.address, blockchain: "Stellar", symbol: "XLM" },
+        { asset: xcm0.address, blockchain: "FIAT", symbol: "USD-USD" },
+        { asset: xcm1.address, blockchain: "FIAT", symbol: "BRL-USD" },
+        { asset: xcm2.address, blockchain: "FIAT", symbol: "EUR-USD" },
+        { asset: xcm3.address, blockchain: "FIAT", symbol: "USD-USD" },
       ],
     ],
     log: true,
