@@ -52,13 +52,13 @@
   },
   "repositories": {
     "nablaContracts": {
-      "git": "https://github.com/0xamberhq/contracts.git",
+      "git": "https://github.com/NablaFinance/contracts.git",
       "branch": "59-incorporate-new-spec",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
     "nablaCurve": {
-      "git": "https://github.com/0xamberhq/curve.git",
+      "git": "https://github.com/NablaFinance/curve.git",
       "branch": "3-change-slippage-curve",
       "init": "yarn"
     },
