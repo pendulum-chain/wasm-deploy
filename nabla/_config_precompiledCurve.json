@@ -47,7 +47,7 @@
   },
   "repositories": {
     "nablaContracts": {
-      "git": "https://github.com/0xamberhq/contracts.git",
+      "git": "https://github.com/NablaFinance/contracts.git",
       "branch": "feature/backstop-pool-coverage-ratio",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
