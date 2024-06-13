@@ -91,7 +91,7 @@
     },
     "nablaCurve": {
       "git": "https://github.com/NablaFinance/curve.git",
-      "branch": "3-change-slippage-curve",
+      "branch": "main",
       "init": "npm"
     },
     "pendulumWrappers": {
