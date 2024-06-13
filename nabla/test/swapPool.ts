@@ -13,6 +13,9 @@ import { changePoolCoverageTo } from "./lib/swapPoolTests";
 const CHARLIE = "6k9LbZKC3dYDqaF6qhS9j438Vg1nawD98i8VuHRKxXSvf1rp";
 const FERDIE = "6hXHGkma9bKW6caAA5Z9Pto8Yxh9BbD8ckE15hSAhbMdF7RC";
 
+const PROTOCOL_TREASURY = "6n5dP3mHz2N6rGwgqPpr9YMFdGAwi7Chko7aTpFifv44hPLL";
+const ATTACKER = "6k6gXPB9idebCxqSJuqpjPaqfYLQbdLHhvsANH8Dg8GQN3tT";
+
 export default async function (environment: TestSuiteEnvironment) {
   const {
     address,
@@ -28,7 +31,15 @@ export default async function (environment: TestSuiteEnvironment) {
   const nablaCurve = await newNablaCurve(0, e(0.01, 18));
 
   const asset = await newTestableERC20Wrapper("Test Token", "TEST", 12, [1], [1], [], []);
-  const pool = await newTestableSwapPool(address(asset), address(nablaCurve), 0, 0, 0, "Test LP Token", "LP");
+  const pool = await newTestableSwapPool(
+    address(asset),
+    address(nablaCurve),
+    0,
+    0,
+    PROTOCOL_TREASURY,
+    "Test LP Token",
+    "LP"
+  );
 
   return {
     async setUp() {
@@ -55,12 +66,60 @@ export default async function (environment: TestSuiteEnvironment) {
       vm.stopPrank();
     },
 
+    async test_setUp_ProtocolTreasuryIsSet() {
+      assertEq(
+        ((await pool.protocolTreasury()) as any).toString(),
+        PROTOCOL_TREASURY,
+        "Unexpected protocol treasury address"
+      );
+    },
+
     async testPoolCap() {
       await genericTestPoolCap(pool, environment);
     },
 
     async testOnlyOwnerCanSetPoolCap() {
       await genericTestOnlyOwnerCanSetPoolCap(pool, environment);
+    },
+
+    async test_maxCoverageRatioForSwapIn_CheckDefaultValue() {
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 200n, "Unexpected default maxCoverageRatioForSwapIn");
+    },
+
+    async test_setMaxCoverageRatioForSwapIn_OnlyOwnerCanSetValue() {
+      vm.startPrank(CHARLIE);
+      vm.expectRevert("Ownable: caller is not the owner");
+      await pool.setMaxCoverageRatioForSwapIn(300n);
+      vm.stopPrank();
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 200n, "Unexpected maxCoverageRatioForSwapIn after set");
+
+      await pool.setMaxCoverageRatioForSwapIn(300n);
+      assertEq(await pool.maxCoverageRatioForSwapIn(), 300n, "Unexpected maxCoverageRatioForSwapIn after set");
+    },
+
+    async test_quoteSwapInto_RevertsIfSwapInWouldExceedMaxCoverageRatio() {
+      await changePoolCoverageTo(pool, e(2, 18), environment);
+      vm.expectRevert("SwapPool: EXCEEDS_MAX_COVERAGE_RATIO");
+      await pool.quoteSwapInto(10);
+
+      const maxCoverageRatio: bigint = await pool.maxCoverageRatioForSwapIn();
+      const [liabilities, reserves] = await pool.coverage();
+
+      const swapInAmountTooBig = (maxCoverageRatio * liabilities) / 100n - reserves + 1n;
+
+      vm.startPrank(CHARLIE);
+      vm.expectRevert("SwapPool: EXCEEDS_MAX_COVERAGE_RATIO");
+      vm.stopPrank();
+      await pool.quoteSwapInto(swapInAmountTooBig);
+    },
+
+    async test_quoteSwapInto_UserCanGetQuote() {
+      const maxCoverageRatio: bigint = await pool.maxCoverageRatioForSwapIn();
+      const [liabilities, reserves] = await pool.coverage();
+
+      const swapInAmount = (maxCoverageRatio * liabilities) / 100n - reserves;
+
+      await pool.quoteSwapInto(swapInAmount);
     },
 
     async testOnlyOwnerCanSetSwapFee() {
@@ -70,6 +129,11 @@ export default async function (environment: TestSuiteEnvironment) {
       vm.expectRevert("Ownable: caller is not the owner");
       await pool.setSwapFees(40, 5, 5);
       vm.stopPrank();
+    },
+
+    async testOwnerCannotSetSwapFeeAbove30Percent() {
+      vm.expectRevert("setSwapFees: FEES_TOO_HIGH");
+      await pool.setSwapFees(200000n, 50000n, 50000n);
     },
 
     async testOnlyOwnerCanSetWithdrawalTimelock() {
@@ -84,10 +148,10 @@ export default async function (environment: TestSuiteEnvironment) {
     async testDeposit() {
       const poolBalanceBefore = await asset.balanceOf(address(pool));
 
-      const [simulatedShares] = await pool.simulateDeposit(unit(5));
+      const depositQuote = await pool.quoteDeposit(unit(5));
 
       // Check Mint event
-      vm.expectEmit(pool, "Mint", [tester, simulatedShares, unit(5)]);
+      vm.expectEmit(pool, "Mint", [tester, depositQuote, unit(5)]);
 
       await pool.deposit(unit(5));
 
@@ -97,26 +161,27 @@ export default async function (environment: TestSuiteEnvironment) {
         poolBalanceBefore + unit(5),
         "Pool should own 5.0 (5E18) more test tokens after deposit"
       );
-
-      assertApproxEq(
-        await pool.insuranceWithdrawalUnlock(tester),
-        (await vm.getBlockNumber()) + (await pool.insuranceWithdrawalTimelock()),
-        "Unexpected insurance withdrawal unlock block no"
-      );
     },
 
     async testWithdrawal() {
       await pool.deposit(unit(5));
 
+      const assetAmountBefore = await asset.balanceOf(tester);
+
       const sharesBefore = await pool.balanceOf(tester);
       const poolBalanceBefore = await asset.balanceOf(address(pool));
-      const [simulatedPayout] = await pool.simulateWithdrawal(unit(3));
+      const withdrawQuote = await pool.quoteWithdraw(unit(3));
 
       // Check Burn event
-      vm.expectEmit(pool, "Burn", [tester, unit(3), simulatedPayout]);
+      vm.expectEmit(pool, "Burn", [tester, unit(3), withdrawQuote]);
 
       await pool.withdraw(unit(3), unit(3));
 
+      assertEq(
+        await asset.balanceOf(tester),
+        assetAmountBefore + withdrawQuote,
+        "LP should own 3.0 (3E18) more test tokens after withdrawal"
+      );
       assertEq(
         await pool.balanceOf(tester),
         sharesBefore - unit(3),
@@ -124,7 +189,7 @@ export default async function (environment: TestSuiteEnvironment) {
       );
       assertEq(
         await asset.balanceOf(address(pool)),
-        poolBalanceBefore - simulatedPayout,
+        poolBalanceBefore - withdrawQuote,
         "Pool should own 3.0 (3E18) less test tokens after withdrawal"
       );
     },
@@ -211,6 +276,41 @@ export default async function (environment: TestSuiteEnvironment) {
 
       const [shares] = await pool.deposit(unit(5));
       assertApproxEq(await pool.sharesTargetWorth(shares), unit(5), "Expected shareTargetWorth() to match deposit");
+    },
+
+    /**
+     * Test: setProtocolTreasury
+     */
+    async test_setProtocolTreasury_RevertIfSenderIsNotOwner() {
+      vm.startPrank(ATTACKER);
+      vm.expectRevert("Ownable: caller is not the owner");
+      await pool.setProtocolTreasury(ATTACKER);
+      vm.stopPrank();
+    },
+
+    async test_setProtocolTreasury_RevertIfAddressIsZeroAddress() {
+      vm.expectRevert("setProtocolTreasury: ZERO_ADDRESS");
+      await pool.setProtocolTreasury(0);
+    },
+
+    async test_setProtocolTreasury_RevertIfAddressIsEqualToCurrentTreasury() {
+      vm.expectRevert("setProtocolTreasury: NO_CHANGE");
+      await pool.setProtocolTreasury(PROTOCOL_TREASURY);
+    },
+
+    async test_setProtocolTreasury_Success() {
+      const newTreasury = "6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr";
+
+      vm.expectEmit(pool, "ProtocolTreasuryChanged", [tester, newTreasury]);
+
+      const returned = await pool.setProtocolTreasury(newTreasury);
+
+      assertEq(
+        ((await pool.protocolTreasury()) as any).toString(),
+        newTreasury,
+        "Unexpected protocol treasury address"
+      );
+      assertTrue(returned, "Expected setProtocolTreasury() to return true");
     },
   };
 }

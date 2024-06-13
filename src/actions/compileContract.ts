@@ -28,9 +28,15 @@ export async function compileContract(
   return uploadedCodePromise;
 }
 
+export interface MessageMetadataArgument {
+  label?: string;
+}
+
 export interface MessageMetadata {
   mutates?: boolean;
   label?: string;
+  selector: string;
+  args: MessageMetadataArgument[];
 }
 
 export interface MetadataFile {
@@ -120,12 +126,35 @@ async function actuallyCompileContract(
   metadata.source.hash = codeHexHash;
   metadata.source.wasm = hexContract;
 
-  const { mutatingOverwrites } = project.getContractConfiguration(contractId);
+  const { mutatingOverwrites, messageNameOverwrites, argumentNameOverwrites } =
+    project.getContractConfiguration(contractId);
   if (mutatingOverwrites !== undefined) {
     Object.entries(mutatingOverwrites).forEach(([messageLabel, mutates]) => {
       const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
       if (foundMessage !== undefined && mutates !== undefined) {
         foundMessage.mutates = mutates;
+      }
+    });
+  }
+
+  if (messageNameOverwrites !== undefined) {
+    Object.entries(messageNameOverwrites).forEach(([messageLabel, newLabel]) => {
+      const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
+      if (foundMessage !== undefined) {
+        foundMessage.label = newLabel;
+      }
+    });
+  }
+
+  if (argumentNameOverwrites !== undefined) {
+    Object.entries(argumentNameOverwrites).forEach(([messageLabel, newArgumentNames]) => {
+      if (newArgumentNames === undefined) return;
+
+      const foundMessage = metadata.spec.messages?.find((message) => message.label === messageLabel);
+      if (foundMessage !== undefined && foundMessage.args.length === newArgumentNames.length) {
+        for (let i = 0; i < newArgumentNames.length; i++) {
+          foundMessage.args[i].label = newArgumentNames[i];
+        }
       }
     });
   }

@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "tsx src/index.ts",
+    "pull:nabla": "tsx src/index.ts pull nabla",
+    "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco",
+    "deploy:local": "tsx src/index.ts deploy nabla --network local",
+    "test:nabla:local":  "tsx src/index.ts test nabla --network local",
+    "test:indexer:local":  "tsx src/index.ts test nabla-indexer --network local"
   },
   "keywords": [],
   "author": "",
@@ -17,24 +22,24 @@
     "@typescript-eslint/eslint-plugin": "^6.7.0",
     "@typescript-eslint/parser": "^6.7.0",
     "eslint": "^8.49.0",
+    "graphql": "^16.8.1",
+    "graphql-request": "^6.1.0",
+    "tsx": "^4.7.3",
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@pendulum-chain/api-solang": "0.0.7",
-    "@polkadot/api": "^10.9.1",
-    "@polkadot/api-contract": "^10.9.1",
-    "@polkadot/keyring": "^12.3.2",
-    "@polkadot/types": "^10.9.1",
-    "@polkadot/types-codec": "^10.9.1",
-    "@polkadot/util": "^12.3.2",
-    "@polkadot/util-crypto": "^12.3.2",
+    "@pendulum-chain/api-solang": "=0.2.0",
+    "@polkadot/api": "=10.9.1",
+    "@polkadot/api-contract": "=10.9.1",
+    "@polkadot/keyring": "=12.3.2",
+    "@polkadot/types": "=10.9.1",
+    "@polkadot/types-codec": "=10.9.1",
+    "@polkadot/util": "=12.3.2",
+    "@polkadot/util-crypto": "=12.3.2",
     "blake2b": "^2.1.4",
     "commander": "^11.0.0",
     "fefe": "^3.2.0",
     "prompts": "^2.4.2",
     "ts-node": "^10.9.1"
-  },
-  "workspaces": [
-    "packages/api-solang"
-  ]
+  }
 }

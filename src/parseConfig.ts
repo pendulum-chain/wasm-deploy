@@ -32,6 +32,13 @@ const validateContractSourceReference = object(
     importpaths: optional(array(string())),
     importmaps: optional(array(validateImportMap)),
     mutatingOverwrites: optional(objectMap(boolean())),
+    // the following is temporary workaround because Solang incorrectly labels overriden functions
+    // see https://matrix.to/#/!SerycSiSddhaCAXosD:parity.io/$98F3bOdGQ_QRaYQE82LQxEDy_q2WNyYM6yysNdbJdlk?via=parity.io&via=matrix.org
+    messageNameOverwrites: optional(objectMap(string())),
+    // the following is a workaround for message arguments that have an empty name
+    // as the generated code in the squid is erroneous
+    // empty message arguments happen, e.g., for public contract variables of type mapping
+    argumentNameOverwrites: optional(objectMap(array(string()))),
   },
   { allowExcessProperties: false }
 );
@@ -114,8 +121,8 @@ function prettyPrintFefeErrors(error: FefeError): string[] {
     case "leaf":
       return [`${error.reason}`];
     case "branch":
-      return error.childErrors.map(
-        (childError) => `${String(childError.key)} -> ${prettyPrintFefeErrors(childError.error)}`
+      return error.childErrors.flatMap((childError) =>
+        prettyPrintFefeErrors(childError.error).map((error) => `${String(childError.key)} -> ${error}`)
       );
   }
 }

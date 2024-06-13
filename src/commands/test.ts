@@ -8,8 +8,9 @@ import { StyledText, createAnimatedTextContext } from "../utils/terminal";
 import { compileContract } from "../actions/compileContract";
 import { toUnit } from "../utils/rationals";
 import { SigningSubmitter, Submitter, getSubmitterAddress } from "../api/submitter";
-import { PanicCode } from "@pendulum-chain/api-solang";
+import { Extrinsic, PanicCode, SubmitExtrinsicResult } from "@pendulum-chain/api-solang";
 import { Codec } from "@polkadot/types-codec/types";
+import { SubmittableExtrinsics } from "@polkadot/api/types";
 
 const NUMBER_OF_FUZZING_ITERATIONS = 64;
 
@@ -82,8 +83,10 @@ export interface CheatCodeInstance {
   expectRevert: (message: string) => void;
   expectEmit: (contract: TestContract, eventIdentifier: string, args: unknown[]) => void;
   mintNative: (account: Address, amount: bigint) => Promise<void>;
+  executeRootExtrinsic: (rootExtrinsic: Extrinsic) => Promise<SubmitExtrinsicResult>;
   roll: (noOfBlocks: bigint | number) => Promise<void>;
   getBlockNumber: () => Promise<bigint>;
+  extrinsicBuilders: SubmittableExtrinsics<"promise">;
 }
 
 export type TestSuiteEnvironment = {
@@ -341,6 +344,10 @@ async function processTestScripts(
       await chainApi.setFreeBalance(account, amount, root);
     };
 
+    const executeRootExtrinsic = async (rootExtrinsic: Extrinsic): Promise<SubmitExtrinsicResult> => {
+      return chainApi.executeRootExtrinsic(rootExtrinsic, root);
+    };
+
     const roll = async (noOfBlocks: bigint | number): Promise<void> => {
       console.log(`Skip ${String(noOfBlocks)} blocks`);
       await chainApi.skipBlocks(noOfBlocks, root);
@@ -362,8 +369,10 @@ async function processTestScripts(
         expectRevert,
         expectEmit,
         mintNative,
+        executeRootExtrinsic,
         roll,
         getBlockNumber,
+        extrinsicBuilders: chainApi.api().tx,
       },
       tester: getSubmitterAddress(tester),
       constructors: {},

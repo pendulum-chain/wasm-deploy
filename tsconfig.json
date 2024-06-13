@@ -8,5 +8,5 @@
     "types": ["node"]
   },
 
-  "include": ["src/**/*", "nabla/**/*"]
+  "include": ["src/**/*", "nabla/**/*", "nabla-indexer/**/*"]
 }

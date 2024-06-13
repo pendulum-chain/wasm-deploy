@@ -1,9 +1,5 @@
 {
   "contracts": {
-    "TestableERC20Wrapper": {
-      "repository": "pendulumWrappers",
-      "path": "testable-erc20-wrapper/TestableERC20Wrapper.sol"
-    },
     "Router": {
       "repository": "nablaContracts",
       "path": "contracts/src/core/Router.sol",
@@ -48,55 +44,26 @@
         "issuer_": "issuer"
       }
     },
-    "PriceOracleWrapper": {
-      "repository": "pendulumWrappers",
-      "path": "price-oracle-wrapper/PriceOracleWrapper.sol",
-      "mutatingOverwrites": {
-        "getAssetPrice": false,
-        "getAnyAssetSupply": false,
-        "getAnyAssetLastUpdateTimestamp": false,
-        "getAnyAssetPrice": false,
-        "getAnyAsset": false
-      }
-    },
-    "TestableBackstopPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableBackstopPool.sol",
-      "messageNameOverwrites": {
-        "decimals_": "decimals"
-      }
-    },
-    "TestableSwapPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableSwapPool.sol",
-      "messageNameOverwrites": {
-        "decimals_": "decimals"
-      }
-    },
     "MockOracle": {
       "repository": "nablaContracts",
       "path": "contracts/src/mock/MockOracle.sol"
-    },
-    "VendingMachine": {
-      "repository": "nablaCurve",
-      "path": "test/util/VendingMachine.sol"
     }
   },
   "repositories": {
     "nablaContracts": {
-      "git": "https://github.com/NablaFinance/contracts.git",
-      "branch": "pendulum-launch",
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "branch": "3e96787e161fb2657c90f18034691749647b691f",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
     "nablaCurve": {
-      "git": "https://github.com/NablaFinance/curve.git",
-      "branch": "main",
+      "git": "https://github.com/0xamberhq/curve.git",
+      "branch": "3-change-slippage-curve",
       "init": "npm"
     },
     "pendulumWrappers": {
       "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
-      "branch": "master"
+      "branch": "5c8dacd274f8bc4d8ba0e448bce1cfb09b58325d"
     }
   },
   "networks": {
