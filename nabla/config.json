@@ -55,7 +55,10 @@
       "git": "https://github.com/NablaFinance/contracts.git",
       "branch": "59-incorporate-new-spec",
       "init": "yarn",
-      "importpaths": ["contracts/@chain/pendulum", "node_modules"]
+      "importpaths": [
+        "contracts/@chain/pendulum",
+        "node_modules"
+      ]
     },
     "nablaCurve": {
       "git": "https://github.com/NablaFinance/curve.git",
