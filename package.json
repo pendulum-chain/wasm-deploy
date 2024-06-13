@@ -7,7 +7,9 @@
     "start": "tsx src/index.ts",
     "pull:nabla": "tsx src/index.ts pull nabla",
     "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco",
-    "deploy:local": "tsx src/index.ts deploy nabla --network local"
+    "deploy:local": "tsx src/index.ts deploy nabla --network local",
+    "test:nabla:local":  "tsx src/index.ts test nabla --network local",
+    "test:indexer:local":  "tsx src/index.ts test nabla-indexer --network local"
   },
   "keywords": [],
   "author": "",
