@@ -37,6 +37,9 @@ export function modifyExtrinsic(api: ApiPromise, submitter: Submitter, extrinsic
       const wrappedExtrinsic = api.tx.utility.dispatchAs({ system: { signed: submitter.accountId } }, extrinsic);
       return api.tx.sudo.sudoUncheckedWeight(wrappedExtrinsic, 0);
     }
+    // case "immortal":{
+      
+    // }
   }
 }
 

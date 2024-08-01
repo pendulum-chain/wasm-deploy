@@ -45,12 +45,12 @@ export async function submitExtrinsic(
   return await new Promise<SubmitExtrinsicResult>(async (resolve, reject) => {
     try {
       let account: AddressOrPair;
-      let signerOptions: Partial<SignerOptions>;
+      let signerOptions: any;
 
       switch (signer.type) {
         case "keypair":
           account = signer.keypair;
-          signerOptions = { nonce: -1 };
+          signerOptions = {era: 0, nonce: -1 };
           break;
 
         case "signer":

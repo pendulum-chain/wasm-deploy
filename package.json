@@ -20,7 +20,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@pendulum-chain/api-solang": "0.0.7",
+    "@pendulum-chain/api-solang": "file:../packages/api-solang",
     "@polkadot/api": "^10.9.1",
     "@polkadot/api-contract": "^10.9.1",
     "@polkadot/keyring": "^12.3.2",
