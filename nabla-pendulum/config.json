@@ -1,0 +1,92 @@
+{
+  "contracts": {
+    "Router": {
+      "repository": "nablaContracts",
+      "path": "contracts/src/core/Router.sol",
+      "argumentNameOverwrites": {
+        "oracleByAsset": ["asset"],
+        "poolByAsset": ["asset"]
+      }
+    },
+    "NablaCurve": {
+      "repository": "nablaCurve",
+      "path": "src/NablaCurve.sol"
+    },
+    "BackstopPool": {
+      "repository": "nablaContracts",
+      "path": "contracts/src/core/BackstopPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
+    },
+    "SwapPool": {
+      "repository": "nablaContracts",
+      "path": "contracts/src/core/SwapPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
+    },
+    "ERC20Wrapper": {
+      "repository": "pendulumWrappers",
+      "path": "erc20-wrapper/ERC20Wrapper.sol",
+      "mutatingOverwrites": {
+        "balanceOf": false,
+        "totalSupply": false,
+        "allowance": false
+      },
+      "messageNameOverwrites": {
+        "name_": "name",
+        "symbol_": "symbol",
+        "decimals_": "decimals",
+        "variant_": "variant",
+        "index_": "index",
+        "code_": "code",
+        "issuer_": "issuer"
+      }
+    },
+    "PriceOracleWrapper": {
+      "repository": "pendulumWrappers",
+      "path": "price-oracle-wrapper/PriceOracleWrapper.sol",
+      "mutatingOverwrites": {
+        "getAssetPrice": false,
+        "getAnyAssetSupply": false,
+        "getAnyAssetLastUpdateTimestamp": false,
+        "getAnyAssetPrice": false,
+        "getAnyAsset": false
+      }
+    }
+  },
+  "repositories": {
+    "nablaContracts": {
+      "git": "https://github.com/0xamberhq/contracts.git",
+      "branch": "pendulum-launch",
+      "init": "yarn",
+      "importpaths": ["contracts/@chain/pendulum", "node_modules"]
+    },
+    "nablaCurve": {
+      "git": "https://github.com/0xamberhq/curve.git",
+      "branch": "3-change-slippage-curve",
+      "init": "npm"
+    },
+    "pendulumWrappers": {
+      "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
+      "branch": "master"
+    }
+  },
+  "networks": {
+    "pendulum": {
+      "namedAccounts": {
+        "deployer": "6brtrQNiDYnte7oan4y3UUCJ3Ci9sK8k5cGjiHwKdVnz9KZ2"
+      },
+      "rpcUrl": "wss://rpc-pendulum.prd.pendulumchain.tech:443"
+    }
+  },
+  "buildFolder": "../target-pendulum",
+  "limits": {
+    "gas": {
+      "refTime": "10000000000000000",
+      "proofSize": "10000000000000000"
+    },
+    "storageDeposit": "2000000000000"
+  }
+}

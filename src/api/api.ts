@@ -14,11 +14,11 @@ import {
 } from "./submitter";
 import {
   DeployContractResult,
-  MessageCallResult,
   SubmitExtrinsicResult,
   deployContract,
-  messageCall,
-  submitExtrinsic,
+  ExecuteMessageResult,
+  executeMessage,
+  signAndSubmitExtrinsic,
 } from "@pendulum-chain/api-solang";
 
 export interface DeployedContractInformation<MetadataId, DeployedContractId> {
@@ -255,7 +255,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
 
       return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
-        submitExtrinsic(sudoExtrinsic, {
+        signAndSubmitExtrinsic(sudoExtrinsic, {
           type: "keypair",
           keypair: rootSigningSubmitter.keypair,
         })
@@ -270,7 +270,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
 
       return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
-        submitExtrinsic(sudoExtrinsic, {
+        signAndSubmitExtrinsic(sudoExtrinsic, {
           type: "keypair",
           keypair: rootSigningSubmitter.keypair,
         })
@@ -284,7 +284,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       project,
       submitter,
       onReadyToSubmit,
-    }: MessageCallOptions): Promise<MessageCallResult> {
+    }: MessageCallOptions): Promise<ExecuteMessageResult> {
       const deployedContract = deployedContracts[deploymentAddress];
       if (deployedContract === undefined) {
         throw new Error(`Unknown contract at address ${deploymentAddress}`);
@@ -298,7 +298,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       const signingSubmitter = extractSigningSubmitter(submitter);
 
       try {
-        return await messageCall({
+        return await executeMessage({
           abi: contractMetadata,
           api,
           messageArguments,

@@ -1,6 +1,7 @@
 node_modules
 build
 target
+target-pendulum
 debug-project
 debug-contracts
 target-debug
