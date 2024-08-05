@@ -1,8 +1,8 @@
 import { WasmDeployEnvironment } from "../../src/index";
 
 const CURVE_PARAMETERS_LOW_SLIPPAGE = {
-  alpha: 0.02,
-  beta: 0.0011,
+  alpha: 0.001,
+  beta: 0.001,
 };
 
 const CURVE_PARAMETERS_NO_SLIPPAGE = {

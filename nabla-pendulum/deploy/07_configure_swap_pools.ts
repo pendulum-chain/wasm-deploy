@@ -17,9 +17,9 @@ async function ConfigureSwapFees({ getNamedAccounts, deployments }: WasmDeployEn
     await setInsuranceWithdrawalTimelock(deployments, { from: deployer, log: true }, swapPool, 7200);
   }
 
-  await setPoolCap(deployments, { from: deployer, log: true }, "swap-usdc", 1000n * 10n ** 6n);
-  await setPoolCap(deployments, { from: deployer, log: true }, "swap-eurc", 1000n * 10n ** 12n);
-  await setPoolCap(deployments, { from: deployer, log: true }, "swap-brl", 5000n * 10n ** 12n);
+  await setPoolCap(deployments, { from: deployer, log: true }, "swap-usdc", 1000n * 15n ** 6n);
+  await setPoolCap(deployments, { from: deployer, log: true }, "swap-eurc", 1000n * 20n ** 12n);
+  await setPoolCap(deployments, { from: deployer, log: true }, "swap-brl", 5000n * 140n ** 12n);
 }
 
 ConfigureSwapFees.tags = ["swap-fees"];

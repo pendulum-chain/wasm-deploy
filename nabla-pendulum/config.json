@@ -58,14 +58,14 @@
   },
   "repositories": {
     "nablaContracts": {
-      "git": "https://github.com/0xamberhq/contracts.git",
+      "git": "https://github.com/NablaFinance/contracts.git",
       "branch": "pendulum-launch",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
     "nablaCurve": {
-      "git": "https://github.com/0xamberhq/curve.git",
-      "branch": "3-change-slippage-curve",
+      "git": "https://github.com/NablaFinance/curve.git",
+      "branch": "1acadb222ec7953cf89d1962cfef5f3f8b9723b2",
       "init": "npm"
     },
     "pendulumWrappers": {

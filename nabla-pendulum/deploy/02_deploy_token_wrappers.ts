@@ -46,7 +46,7 @@ async function DeployTokenWrappers({ getNamedAccounts, deployments }: WasmDeploy
 DeployTokenWrappers.tags = ["tokens"];
 
 DeployTokenWrappers.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
-  const alreadyDeployed = Boolean(await deployments.getOrNull("mETH"));
+  const alreadyDeployed = Boolean(await deployments.getOrNull("usdcErc20Wrapper"));
   return alreadyDeployed;
 };
 
