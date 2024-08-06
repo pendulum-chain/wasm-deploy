@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "tsx src/index.ts",
+    "pull:nabla": "tsx src/index.ts pull nabla",
+    "pull:nabla-pendulum": "tsx src/index.ts pull nabla-pendulum",
+    "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco",
+    "deploy:local": "tsx src/index.ts deploy nabla --network local",
+    "deploy:pendulum": "tsx src/index.ts deploy nabla-pendulum --network pendulum"
   },
   "keywords": [],
   "author": "",
@@ -20,9 +25,9 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@pendulum-chain/api-solang": "0.0.7",
+    "@pendulum-chain/api-solang": "^0.5.1",
     "@polkadot/api": "^10.9.1",
-    "@polkadot/api-contract": "^10.9.1",
+    "@polkadot/api-contract": "^10.12.1",
     "@polkadot/keyring": "^12.3.2",
     "@polkadot/types": "^10.9.1",
     "@polkadot/types-codec": "^10.9.1",
@@ -32,7 +37,7 @@
     "commander": "^11.0.0",
     "fefe": "^3.2.0",
     "prompts": "^2.4.2",
-    "ts-node": "^10.9.1"
+    "tsx": "^4.16.0"
   },
   "workspaces": [
     "packages/api-solang"
