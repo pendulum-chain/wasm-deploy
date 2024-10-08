@@ -21,7 +21,7 @@ The `deploy` command takes two required arguments:
   - `mockTestnet`: described [on Notion](https://www.notion.so/satoshipay/24-09-30-Nabla-Foucoco-Paseo-Deployment-1118b1b29b2f804eababf94383a56f7b)
   - `slippageTest`: used for validating slippage calulcations, see [this page on Notion](https://www.notion.so/satoshipay/24-09-30-Public-Deployment-1118b1b29b2f807283dbd10e0a6ae8b9?pvs=4#1158b1b29b2f80bc8be8efb7bc5197b4)
 
-# Required
+# Setup
 
 ```
 brew install binaryen
@@ -30,6 +30,17 @@ brew install binaryen
 ## Install solang
 
 You can find the installation instructions for solang [here](https://solang.readthedocs.io/en/v0.3.3/installing.html).
+
+## Setup local configuration
+
+Create a file `localConfig.json` in the root folder of this repository and add the following content:
+
+```
+{
+  "solangPath": "path/to/your/solang/binary"
+}
+
+```
 
 ### Build from source
 

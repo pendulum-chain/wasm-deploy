@@ -69,7 +69,7 @@
       "init": "npm"
     },
     "pendulumWrappers": {
-      "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
+      "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
       "branch": "master"
     }
   },
