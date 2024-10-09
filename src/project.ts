@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
 import { Dirent } from "node:fs";
-import { prompts } from "prompts";
+import prompts from "prompts";
 import { Keyring } from "@polkadot/api";
 
 import { ContractSourcecodeId, NamedAccountId, ScriptName } from "./types";
@@ -95,11 +95,17 @@ export async function initializeProject(relativeProjectPath: string, configFileN
     if (suri === undefined) {
       while (true /* eslint-disable-line no-constant-condition */) {
         try {
-          suri = (await prompts.password({
+          const answers = await prompts<"value">({
             type: "password",
             name: "value",
             message: `Enter the secret key URI for named account "${namedAccountId}" (${accountId}): `,
-          })) as string | undefined;
+          });
+
+          if (typeof answers.value !== "string") {
+            throw new Error("Invalid input");
+          }
+
+          suri = answers.value;
         } catch (error) {
           // Graceful exit here
           process.exit();

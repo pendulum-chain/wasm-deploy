@@ -24,8 +24,9 @@ export function parseCommandLine() {
     .description("Run the project's deployment scripts")
     .argument("<project>", "project folder")
     .requiredOption("-n, --network <name>", "the network name of the project")
+    .option("-d, --deployment <name>", "selects a particular deployment by name")
     .action(async (str, options: Record<string, string>) => {
-      await deploy({ projectFolder: str as string, network: options.network });
+      await deploy({ projectFolder: str as string, network: options.network, deploymentName: options.deployment });
     });
 
   program

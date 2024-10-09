@@ -1,6 +1,7 @@
 import { WsProvider, ApiPromise, Keyring } from "@polkadot/api";
 import { u8aConcat } from "@polkadot/util";
 import { Abi } from "@polkadot/api-contract";
+import { Extrinsic } from "@pendulum-chain/api-solang";
 
 import { Address } from "../types";
 import { computeQuotient } from "../utils/rationals";
@@ -16,9 +17,9 @@ import {
   DeployContractResult,
   SubmitExtrinsicResult,
   deployContract,
+  signAndSubmitExtrinsic,
   ExecuteMessageResult,
   executeMessage,
-  signAndSubmitExtrinsic,
 } from "@pendulum-chain/api-solang";
 
 export interface DeployedContractInformation<MetadataId, DeployedContractId> {
@@ -59,6 +60,7 @@ export type ChainApi<MetadataId extends Key, DeployedContractId> = ChainApiPromi
   : never;
 
 export async function connectToChain<MetadataId extends Key, DeployedContractId>(rpcUrl: string) {
+  console.log(`Connecting to chain ${rpcUrl}`);
   const provider = new WsProvider(rpcUrl);
 
   const api = await ApiPromise.create({
@@ -254,7 +256,21 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       const setBalanceExtrinsic = api.tx.balances.setBalance(address, amount, 0);
       const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
 
-      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
+      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(() =>
+        signAndSubmitExtrinsic(sudoExtrinsic, {
+          type: "keypair",
+          keypair: rootSigningSubmitter.keypair,
+        })
+      );
+    },
+
+    async executeRootExtrinsic(
+      rootExtrinsic: Extrinsic,
+      rootSigningSubmitter: SigningSubmitter
+    ): Promise<SubmitExtrinsicResult> {
+      const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(rootExtrinsic, 0);
+
+      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(() =>
         signAndSubmitExtrinsic(sudoExtrinsic, {
           type: "keypair",
           keypair: rootSigningSubmitter.keypair,
@@ -269,7 +285,7 @@ export async function connectToChain<MetadataId extends Key, DeployedContractId>
       const setBalanceExtrinsic = api.tx.contracts.skipBlocks(noOfBlocks);
       const sudoExtrinsic = api.tx.sudo.sudoUncheckedWeight(setBalanceExtrinsic, 0);
 
-      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(async () =>
+      return rootSigningSubmitter.mutex.exclusive<SubmitExtrinsicResult>(() =>
         signAndSubmitExtrinsic(sudoExtrinsic, {
           type: "keypair",
           keypair: rootSigningSubmitter.keypair,

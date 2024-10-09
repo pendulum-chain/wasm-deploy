@@ -7,6 +7,7 @@ import { initializeProject } from "../project";
 export interface DeployOptions {
   projectFolder: string;
   network: string;
+  deploymentName: string | undefined;
 }
 
 export interface Deployment {
@@ -38,6 +39,7 @@ export interface WasmDeployEnvironment {
   getNamedAccounts(): Promise<NamedAccounts>;
   deployments: DeploymentsExtension;
   network: Network;
+  deploymentName: string | undefined;
 }
 
 export interface Network {
@@ -72,6 +74,7 @@ export async function deploy(options: DeployOptions) {
       network,
       project,
       chainApi,
+      options.deploymentName,
       updateDynamicText,
       addStaticText
     );

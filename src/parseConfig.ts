@@ -121,8 +121,8 @@ function prettyPrintFefeErrors(error: FefeError): string[] {
     case "leaf":
       return [`${error.reason}`];
     case "branch":
-      return error.childErrors.map(
-        (childError) => `${String(childError.key)} -> ${prettyPrintFefeErrors(childError.error)}`
+      return error.childErrors.flatMap((childError) =>
+        prettyPrintFefeErrors(childError.error).map((error) => `${String(childError.key)} -> ${error}`)
       );
   }
 }

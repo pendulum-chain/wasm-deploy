@@ -6,5 +6,6 @@ debug-project
 debug-contracts
 target-debug
 solang-mac-arm
-
 .yarn
+nabla/excluded
+localConfig.json

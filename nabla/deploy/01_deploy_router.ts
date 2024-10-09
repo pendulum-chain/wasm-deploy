@@ -1,7 +1,11 @@
 import { WasmDeployEnvironment } from "../../src/index";
+import { selectDeployment } from "../deployments/selector";
 
-async function DeployRouter({ getNamedAccounts, deployments }: WasmDeployEnvironment) {
+async function DeployRouter({ getNamedAccounts, deployments, deploymentName }: WasmDeployEnvironment) {
   const { deployer } = await getNamedAccounts();
+
+  // just check early that deploymentName is valid
+  selectDeployment(deploymentName, deployer.accountId);
 
   await deployments.deploy("router", {
     from: deployer,
@@ -13,9 +17,10 @@ async function DeployRouter({ getNamedAccounts, deployments }: WasmDeployEnviron
 
 DeployRouter.tags = ["router"];
 
-DeployRouter.skip = async function skip({ deployments }: WasmDeployEnvironment): Promise<boolean> {
-  const alreadyDeployed = Boolean(await deployments.getOrNull("router"));
-  return alreadyDeployed;
+// eslint-disable-next-line @typescript-eslint/require-await
+DeployRouter.skip = async function skip(_: WasmDeployEnvironment): Promise<boolean> {
+  // the skip feature is not implemented yet in wasm-deploy
+  return false;
 };
 
 export default DeployRouter;

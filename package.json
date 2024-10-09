@@ -6,27 +6,31 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "pull:nabla": "tsx src/index.ts pull nabla",
-    "pull:nabla-pendulum": "tsx src/index.ts pull nabla-pendulum",
-    "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco",
-    "deploy:local": "tsx src/index.ts deploy nabla --network local",
-    "deploy:pendulum": "tsx src/index.ts deploy nabla-pendulum --network pendulum"
+    "deploy:foucoco": "tsx src/index.ts deploy nabla --network foucoco --deployment mockTestnet",
+    "deploy:local": "tsx src/index.ts deploy nabla --network local --deployment mockTestnet",
+    "deploy:pendulum": "tsx src/index.ts deploy nabla --network pendulum --deployment productionPendulum",
+    "lint:ts": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "yarn@4.5.0+sha512.837566d24eec14ec0f5f1411adb544e892b3454255e61fdef8fd05f3429480102806bac7446bc9daff3896b01ae4b62d00096c7e989f1596f2af10b927532f39",
+  "type": "module",
   "devDependencies": {
     "@tsconfig/node16": "^1.0.4",
     "@types/blake2b": "^2.1.0",
     "@types/node": "^20.3.1",
     "@types/prompts": "^2.4.2",
-    "@typescript-eslint/eslint-plugin": "^6.7.0",
-    "@typescript-eslint/parser": "^6.7.0",
-    "eslint": "^8.49.0",
+    "@typescript-eslint/eslint-plugin": "^8.7.0",
+    "@typescript-eslint/parser": "^8.7.0",
+    "eslint": "^9.11.1",
+    "graphql": "^16.8.1",
+    "graphql-request": "^6.1.0",
+    "tsx": "^4.19.1",
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@pendulum-chain/api-solang": "^0.5.1",
+    "@pendulum-chain/api-solang": "^0.7.2",
     "@polkadot/api": "^13.2.1",
     "@polkadot/api-contract": "^13.2.1",
     "@polkadot/keyring": "^13.1.1",
@@ -37,10 +41,6 @@
     "blake2b": "^2.1.4",
     "commander": "^11.0.0",
     "fefe": "^3.2.0",
-    "prompts": "^2.4.2",
-    "tsx": "^4.16.0"
-  },
-  "workspaces": [
-    "packages/api-solang"
-  ]
+    "prompts": "^2.4.2"
+  }
 }

@@ -3,10 +3,25 @@
 
   "compilerOptions": {
     "outDir": "build",
-    "declaration": true,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node"]
+    "types": ["node"],
+    "moduleDetection": "force",
+
+    // Ignore module structure
+    "module": "Preserve",
+
+    // Allow JSON modules to be imported
+    "resolveJsonModule": true,
+
+    // Allow JS files to be imported from TS and vice versa
+    "allowJs": true,
+
+    // Use correct ESM import behavior
+    "esModuleInterop": true,
+
+    // Disallow features that require cross-file awareness
+    "isolatedModules": true
   },
 
-  "include": ["src/**/*", "nabla/**/*"]
+  "include": ["src/**/*", "nabla/**/*", "nabla-indexer/**/*", "nabla/**/*"]
 }

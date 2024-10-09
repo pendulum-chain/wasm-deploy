@@ -21,7 +21,6 @@ export async function registerSwapPool(
   insuranceFeeBps: number = 0
 ) {
   const registerWithRouter = await deployments.execute("router", tx, "registerPool", tokenAddr, swapPoolAddr);
-
   const registerWithBackstop = await deployments.execute("backstop", tx, "addSwapPool", swapPoolAddr, insuranceFeeBps);
 
   return [registerWithRouter, registerWithBackstop];
@@ -32,14 +31,47 @@ export async function setSwapFees(
   tx: TxOptions,
   /// Deployment name
   swapPool: string,
-  /// in basis points (0.01%)
-  lpFeeBps: number,
-  /// in basis points (0.01%)
-  backstopFeeBps: number,
-  /// in basis points (0.01%)
-  protocolFeeBps: number
+  /// in 1/100 of basis points (0.0001%)
+  lpFee: number,
+  /// in 1/100 of basis points (0.0001%)
+  backstopFee: number,
+  /// in 1/100 of basis points (0.0001%)
+  protocolFee: number
 ) {
-  return await deployments.execute(swapPool, tx, "setSwapFees", lpFeeBps, backstopFeeBps, protocolFeeBps);
+  return await deployments.execute(swapPool, tx, "setSwapFees", lpFee, backstopFee, protocolFee);
+}
+
+export async function setInsuranceWithdrawalTimelock(
+  deployments: DeploymentsExtension,
+  tx: TxOptions,
+  /// Deployment name
+  swapPool: string,
+  /// timelock in blocks
+  blocks: number
+) {
+  return await deployments.execute(swapPool, tx, "setInsuranceWithdrawalTimelock", blocks);
+}
+
+export async function setPoolCap(
+  deployments: DeploymentsExtension,
+  tx: TxOptions,
+  /// Deployment name
+  pool: string,
+  /// timelock in blocks
+  maxTokens: bigint
+) {
+  return await deployments.execute(pool, tx, "setPoolCap", maxTokens);
+}
+
+export async function setMaxCoverageRatio(
+  deployments: DeploymentsExtension,
+  tx: TxOptions,
+  /// Deployment name
+  pool: string,
+  /// timelock in blocks
+  maxCoverageRatio: bigint
+) {
+  return await deployments.execute(pool, tx, "setMaxCoverageRatioForSwapIn", maxCoverageRatio);
 }
 
 // A quick hack to hopefully not crash the deployment procedure anymore after the

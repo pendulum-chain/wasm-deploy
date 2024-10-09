@@ -2,59 +2,68 @@
   "contracts": {
     "Router": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/Router.sol"
+      "path": "contracts/src/core/Router.sol",
+      "argumentNameOverwrites": {
+        "oracleByAsset": ["asset"],
+        "poolByAsset": ["asset"]
+      }
     },
     "NablaCurve": {
-      "path": "NablaCurve.contract",
-      "isPrecompiled": true
+      "repository": "nablaCurve",
+      "path": "src/NablaCurve.sol"
     },
     "BackstopPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/BackstopPool.sol"
+      "path": "contracts/src/core/BackstopPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "SwapPool": {
       "repository": "nablaContracts",
-      "path": "contracts/src/core/SwapPool.sol"
+      "path": "contracts/src/core/SwapPool.sol",
+      "messageNameOverwrites": {
+        "decimals_": "decimals"
+      }
     },
     "ERC20Wrapper": {
       "repository": "pendulumWrappers",
-      "path": "erc20-wrapper/ERC20Wrapper.sol"
-    },
-    "PriceOracleWrapper": {
-      "repository": "pendulumWrappers",
-      "path": "price-oracle-wrapper/PriceOracleWrapper.sol"
-    },
-    "TestableBackstopPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableBackstopPool.sol"
-    },
-    "TestableSwapPool": {
-      "repository": "nablaContracts",
-      "path": "contracts/test/lib/TestableSwapPool.sol"
-    },
-    "MockERC20": {
-      "repository": "nablaContracts",
-      "path": "contracts/src/mock/MockERC20.sol"
+      "path": "erc20-wrapper/ERC20Wrapper.sol",
+      "mutatingOverwrites": {
+        "balanceOf": false,
+        "totalSupply": false,
+        "allowance": false
+      },
+      "messageNameOverwrites": {
+        "name_": "name",
+        "symbol_": "symbol",
+        "decimals_": "decimals",
+        "variant_": "variant",
+        "index_": "index",
+        "code_": "code",
+        "issuer_": "issuer"
+      }
     },
     "MockOracle": {
       "repository": "nablaContracts",
       "path": "contracts/src/mock/MockOracle.sol"
-    },
-    "VendingMachine": {
-      "path": "VendingMachine.contract",
-      "isPrecompiled": true
     }
   },
   "repositories": {
     "nablaContracts": {
       "git": "https://github.com/NablaFinance/contracts.git",
-      "branch": "feature/backstop-pool-coverage-ratio",
+      "branch": "3e96787e161fb2657c90f18034691749647b691f",
       "init": "yarn",
       "importpaths": ["contracts/@chain/pendulum", "node_modules"]
     },
+    "nablaCurve": {
+      "git": "https://github.com/NablaFinance/curve.git",
+      "branch": "3-change-slippage-curve",
+      "init": "npm"
+    },
     "pendulumWrappers": {
-      "git": "https://github.com/pendulum-chain/pendulum-ink-wrapper",
-      "branch": "master"
+      "git": "https://github.com/pendulum-chain/pendulum-solidity-wrapper",
+      "branch": "5c8dacd274f8bc4d8ba0e448bce1cfb09b58325d"
     }
   },
   "networks": {
@@ -89,8 +98,8 @@
   "buildFolder": "../target",
   "limits": {
     "gas": {
-      "refTime": "100000000000",
-      "proofSize": "10000000"
+      "refTime": "10000000000000000",
+      "proofSize": "10000000000000000"
     },
     "storageDeposit": "10000000000000"
   }
