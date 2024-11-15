@@ -2,6 +2,7 @@ import { DeploymentDescription } from "./types";
 
 import * as usdtVortexPrototype from "./pendulum/usdtVortexPrototype";
 import * as usdcAxelarVortexPrototype from "./pendulum/usdcAxelarVortexPrototype";
+import * as usdcAssetHubVortexPrototype from "./pendulum/usdcAssetHubVortexPrototype";
 import * as productionPendulum from "./pendulum/productionPendulum";
 import * as mockTestnet from "./foucoco/mockTestnet";
 import * as slippageTest from "./foucoco/slippageTest";
@@ -9,6 +10,7 @@ import * as slippageTest from "./foucoco/slippageTest";
 const DEPLOYMENT_DESCRIPTIONS: Record<string, (treasuryAccount: string) => DeploymentDescription> = {
   usdtVortexPrototype: usdtVortexPrototype.generateDeploymentDescription,
   usdcAxelarVortexPrototype: usdcAxelarVortexPrototype.generateDeploymentDescription,
+  usdcAssetHubVortexPrototype: usdcAssetHubVortexPrototype.generateDeploymentDescription,
   productionPendulum: productionPendulum.generateDeploymentDescription,
   mockTestnet: mockTestnet.generateDeploymentDescription,
   slippageTest: slippageTest.generateDeploymentDescription,
